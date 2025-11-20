@@ -1,16 +1,28 @@
-# trash_dash_demo
+# TrashDash
 
-A new Flutter project.
+Trash Dash, an app that allows users to post their trash and other people can come pick it up. It's all free.
+
+## Features
+
+- Interactive Google Maps with real-time item locations
+- Color-coded markers (green for available, orange for claimed)
+- One-item-at-a-time claiming to prevent hoarding
+- Automatic info windows when zoomed in
+- Direct integration with Google Maps for navigation
+- Item categories: Furniture, Electronics, Clothing, Books, Toys, Appliances, Decorations, and more
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+1. Clone the repository
+2. Run `flutter pub get` to install dependencies
+3. Add your Google Maps API key to:
+   - `android/app/src/main/AndroidManifest.xml`
+   - `ios/Runner/AppDelegate.swift`
+4. Run the app with `flutter run`
 
-A few resources to get you started if this is your first Flutter project:
+## Technologies
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Flutter SDK ^3.5.2
+- Google Maps Flutter ^2.10.0
+- Location Services ^7.0.0
+- URL Launcher ^6.3.0
