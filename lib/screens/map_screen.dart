@@ -500,48 +500,84 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    bool serviceEnabled;
-    PermissionStatus permissionGranted;
+    try {
+      bool serviceEnabled;
+      PermissionStatus permissionGranted;
 
-    serviceEnabled = await location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await location.requestService();
-      if (!serviceEnabled) {
-        setState(() {
-          _isLoadingLocation = false;
-        });
-        return;
-      }
-    }
-
-    permissionGranted = await location.hasPermission();
-    if (permissionGranted == PermissionStatus.denied) {
-      permissionGranted = await location.requestPermission();
-      if (permissionGranted != PermissionStatus.granted) {
-        setState(() {
-          _isLoadingLocation = false;
-        });
-        return;
-      }
-    }
-
-    final locationData = await location.getLocation();
-    setState(() {
-      _currentPosition = LatLng(
-        locationData.latitude ?? 38.8339,
-        locationData.longitude ?? -104.8214,
+      // Add timeout to prevent infinite loading
+      serviceEnabled = await location.serviceEnabled().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => false,
       );
-      _isLoadingLocation = false;
-    });
 
-    _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: _currentPosition!,
-          zoom: 15.0,
+      if (!serviceEnabled) {
+        serviceEnabled = await location.requestService().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => false,
+        );
+        if (!serviceEnabled) {
+          // Use default location if service not enabled
+          setState(() {
+            _currentPosition = const LatLng(38.8339, -104.8214);
+            _isLoadingLocation = false;
+          });
+          return;
+        }
+      }
+
+      permissionGranted = await location.hasPermission().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => PermissionStatus.denied,
+      );
+
+      if (permissionGranted == PermissionStatus.denied) {
+        permissionGranted = await location.requestPermission().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => PermissionStatus.denied,
+        );
+        if (permissionGranted != PermissionStatus.granted) {
+          // Use default location if permission denied
+          setState(() {
+            _currentPosition = const LatLng(38.8339, -104.8214);
+            _isLoadingLocation = false;
+          });
+          return;
+        }
+      }
+
+      LocationData? locationData;
+      try {
+        locationData = await location.getLocation().timeout(
+          const Duration(seconds: 10),
+        );
+      } catch (e) {
+        // Timeout or error getting location
+        locationData = null;
+      }
+
+      setState(() {
+        _currentPosition = LatLng(
+          locationData?.latitude ?? 38.8339,
+          locationData?.longitude ?? -104.8214,
+        );
+        _isLoadingLocation = false;
+      });
+
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentPosition!,
+            zoom: 15.0,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      // If any error occurs, use default location
+      setState(() {
+        _currentPosition = const LatLng(38.8339, -104.8214);
+        _isLoadingLocation = false;
+      });
+    }
   }
 
   Widget _buildDrawer(BuildContext context) {
