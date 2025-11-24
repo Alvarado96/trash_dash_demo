@@ -1,7 +1,20 @@
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
+import 'package:trash_dash_demo/services/local_storage_service.dart';
 
 class SampleData {
+  // Initialize sample data in Hive if not already present
+  static Future<void> initializeSampleData() async {
+    final existingItems = LocalStorageService.getAllTrashItems();
+
+    // Only add sample data if database is empty
+    if (existingItems.isEmpty) {
+      for (var item in sampleItems) {
+        await LocalStorageService.saveTrashItem(item);
+      }
+    }
+  }
+
   static final List<TrashItem> sampleItems = [
     TrashItem(
       id: '1',
@@ -84,7 +97,7 @@ class SampleData {
     TrashItem(
       id: '8',
       name: 'Small Bookshelf',
-      category: ItemCategory.furniture,
+      category: ItemCategory.bookshelf,
       description: '3-shelf bookshelf, white color',
       imageUrl: 'https://images.unsplash.com/photo-1594620302200-9a762244a156?w=400',
       location: const LatLng(38.8398, -104.7421),
@@ -129,7 +142,7 @@ class SampleData {
     TrashItem(
       id: '12',
       name: 'Red Toolbox with Tools',
-      category: ItemCategory.other,
+      category: ItemCategory.tools,
       description: 'Metal toolbox with basic hand tools - screwdrivers, wrenches, hammer',
       imageUrl: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=400',
       location: const LatLng(38.8611, -104.8156),
@@ -170,6 +183,116 @@ class SampleData {
       postedAt: DateTime.now().subtract(const Duration(minutes: 120)),
       status: ItemStatus.claimed,
       claimedBy: 'Mark Wilson',
+    ),
+    TrashItem(
+      id: '16',
+      name: 'Wooden Dining Chair Set',
+      category: ItemCategory.chair,
+      description: 'Set of 4 dining chairs, matching wood finish',
+      imageUrl: 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=400',
+      location: const LatLng(38.8301, -104.8102),
+      postedBy: 'Michael Thompson',
+      postedAt: DateTime.now().subtract(const Duration(hours: 3)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '17',
+      name: 'Coffee Table',
+      category: ItemCategory.table,
+      description: 'Glass top coffee table with wooden legs, minor scratches',
+      imageUrl: 'https://images.unsplash.com/photo-1554295405-abb8fd54f153?w=400',
+      location: const LatLng(38.8456, -104.7889),
+      postedBy: 'Sarah Connor',
+      postedAt: DateTime.now().subtract(const Duration(hours: 5)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '18',
+      name: 'Office Desk Chair',
+      category: ItemCategory.chair,
+      description: 'Ergonomic office chair, adjustable height, one wheel needs fixing',
+      imageUrl: 'https://images.unsplash.com/photo-1580480055273-228ff5388ef8?w=400',
+      location: const LatLng(38.8198, -104.8411),
+      postedBy: 'James Wilson',
+      postedAt: DateTime.now().subtract(const Duration(hours: 9)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '19',
+      name: 'Folding Table',
+      category: ItemCategory.table,
+      description: 'Plastic folding table, 6ft long, great for parties',
+      imageUrl: 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=400',
+      location: const LatLng(38.8533, -104.8267),
+      postedBy: 'Linda Martinez',
+      postedAt: DateTime.now().subtract(const Duration(minutes: 75)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '20',
+      name: 'Yard Waste Bags',
+      category: ItemCategory.generalTrash,
+      description: '10 bags of leaves and grass clippings from yard cleanup',
+      imageUrl: 'https://images.unsplash.com/photo-1604187351574-c75ca79f5807?w=400',
+      location: const LatLng(38.8422, -104.7756),
+      postedBy: 'Robert Johnson',
+      postedAt: DateTime.now().subtract(const Duration(hours: 2)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '21',
+      name: 'Broken Plastic Bins',
+      category: ItemCategory.generalTrash,
+      description: 'Several cracked storage bins, still usable for non-critical storage',
+      imageUrl: 'https://images.unsplash.com/photo-1591768575957-a9f8d34d5456?w=400',
+      location: const LatLng(38.8678, -104.8178),
+      postedBy: 'Angela Davis',
+      postedAt: DateTime.now().subtract(const Duration(hours: 6)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '22',
+      name: 'Power Drill Set',
+      category: ItemCategory.tools,
+      description: 'Cordless drill with bits and case, battery still holds charge',
+      imageUrl: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400',
+      location: const LatLng(38.8245, -104.7923),
+      postedBy: 'Daniel Brown',
+      postedAt: DateTime.now().subtract(const Duration(hours: 11)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '23',
+      name: 'Large Bookshelf Unit',
+      category: ItemCategory.bookshelf,
+      description: '6-shelf tall bookshelf, dark wood, will need 2 people to move',
+      imageUrl: 'https://images.unsplash.com/photo-1594620302200-9a762244a156?w=400',
+      location: const LatLng(38.8567, -104.8334),
+      postedBy: 'Nancy Garcia',
+      postedAt: DateTime.now().subtract(const Duration(hours: 13)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '24',
+      name: 'Nightstand with Drawer',
+      category: ItemCategory.table,
+      description: 'Small bedside table, one drawer, white painted finish',
+      imageUrl: 'https://images.unsplash.com/photo-1595526051245-2456e6dc5a86?w=400',
+      location: const LatLng(38.8334, -104.8056),
+      postedBy: 'Carlos Rodriguez',
+      postedAt: DateTime.now().subtract(const Duration(hours: 14)),
+      status: ItemStatus.available,
+    ),
+    TrashItem(
+      id: '25',
+      name: 'Patio Chair',
+      category: ItemCategory.chair,
+      description: 'Plastic outdoor chair, slight fading from sun exposure',
+      imageUrl: 'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=400',
+      location: const LatLng(38.8489, -104.7612),
+      postedBy: 'Michelle Lee',
+      postedAt: DateTime.now().subtract(const Duration(hours: 15)),
+      status: ItemStatus.available,
     ),
   ];
 

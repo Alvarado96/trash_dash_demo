@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
-import 'package:trash_dash_demo/data/sample_data.dart';
+import 'package:trash_dash_demo/models/user_model.dart';
+import 'package:trash_dash_demo/services/local_storage_service.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
+import 'package:trash_dash_demo/screens/interested_items_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final TrashItem? selectedItem;
+
+  const MapScreen({super.key, this.selectedItem});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -28,20 +33,65 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _loadTrashItems();
     _getCurrentLocation();
+
+    // If a selected item was passed, show its details after a short delay
+    if (widget.selectedItem != null) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          _showItemDetailsAndCenter(widget.selectedItem!);
+        }
+      });
+    }
+  }
+
+  void _showItemDetailsAndCenter(TrashItem item) {
+    // Center map on the item
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: item.location,
+          zoom: 16.0,
+        ),
+      ),
+    );
+
+    // Show item details
+    _showItemDetails(item);
   }
 
   void _loadTrashItems() {
     setState(() {
-      _trashItems = SampleData.sampleItems;
+      _trashItems = LocalStorageService.getAllTrashItems();
       _createMarkers();
     });
   }
 
   void _createMarkers() {
+    final currentUser = LocalStorageService.getCurrentUser();
+    final userInterests = currentUser?.interestedCategories ?? [];
+
     _markers = _trashItems
         .where((item) => item.status != ItemStatus.pickedUp)
         .map((item) {
       final String statusText = item.status == ItemStatus.available ? 'Available' : 'Claimed';
+
+      // Check if this item matches user's interests
+      final bool matchesInterest = userInterests.any(
+        (interest) => interest.toLowerCase() == item.categoryName.toLowerCase()
+      );
+
+      // Determine marker color
+      double markerHue;
+      if (matchesInterest && item.status == ItemStatus.available) {
+        // Cyan/Azure color for items matching interests and available
+        markerHue = BitmapDescriptor.hueAzure;
+      } else if (item.status == ItemStatus.available) {
+        // Green for available items
+        markerHue = BitmapDescriptor.hueGreen;
+      } else {
+        // Orange for claimed items
+        markerHue = BitmapDescriptor.hueOrange;
+      }
 
       return Marker(
         markerId: MarkerId(item.id),
@@ -50,11 +100,7 @@ class _MapScreenState extends State<MapScreen> {
           title: item.name,
           snippet: '${item.categoryName} • $statusText',
         ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          item.status == ItemStatus.available
-              ? BitmapDescriptor.hueGreen
-              : BitmapDescriptor.hueOrange,
-        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(markerHue),
         onTap: () {
           _handleMarkerTap(item);
         },
@@ -280,6 +326,12 @@ class _MapScreenState extends State<MapScreen> {
                             item.status = ItemStatus.claimed;
                             item.claimedBy = 'You';
                             _currentlyClaimedItem = item;
+                          });
+
+                          // Save to Hive
+                          await LocalStorageService.updateTrashItem(item);
+
+                          setState(() {
                             _createMarkers();
                           });
 
@@ -346,19 +398,28 @@ class _MapScreenState extends State<MapScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         setState(() {
                           item.status = ItemStatus.pickedUp;
                           _currentlyClaimedItem = null;
+                        });
+
+                        // Save to Hive
+                        await LocalStorageService.updateTrashItem(item);
+
+                        setState(() {
                           _createMarkers();
                         });
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Item picked up! Enjoy your treasure!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
+
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Item picked up! Enjoy your treasure!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue.shade700,
@@ -375,20 +436,29 @@ class _MapScreenState extends State<MapScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         setState(() {
                           item.status = ItemStatus.available;
                           item.claimedBy = null;
                           _currentlyClaimedItem = null;
+                        });
+
+                        // Save to Hive
+                        await LocalStorageService.updateTrashItem(item);
+
+                        setState(() {
                           _createMarkers();
                         });
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Item unclaimed. It\'s now available for others.'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
+
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Item unclaimed. It\'s now available for others.'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -474,11 +544,137 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Widget _buildDrawer(BuildContext context) {
+    final UserModel? currentUser = LocalStorageService.getCurrentUser();
+
+    return Drawer(
+      child: Column(
+        children: [
+          // Header with user info
+          UserAccountsDrawerHeader(
+            decoration: BoxDecoration(
+              color: Colors.green.shade700,
+            ),
+            currentAccountPicture: CircleAvatar(
+              backgroundColor: Colors.white,
+              child: currentUser?.photoUrl != null
+                  ? ClipOval(
+                      child: Image.network(
+                        currentUser!.photoUrl!,
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Text(
+                            currentUser.firstName[0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 40,
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : Text(
+                      currentUser?.firstName[0].toUpperCase() ?? 'U',
+                      style: TextStyle(
+                        fontSize: 40,
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+            accountName: Text(
+              '${currentUser?.firstName ?? ''} ${currentUser?.lastName ?? ''}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            accountEmail: Text(
+              currentUser?.email ?? '',
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          // Profile option
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('Profile'),
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Profile screen coming soon!'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          // My Items option
+          ListTile(
+            leading: const Icon(Icons.favorite),
+            title: const Text('Items I\'m Interested In'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const InterestedItemsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          // Logout option
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text(
+              'Logout',
+              style: TextStyle(color: Colors.red),
+            ),
+            onTap: () async {
+              // Show confirmation dialog
+              final bool? confirmLogout = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Logout'),
+                  content: const Text('Are you sure you want to logout?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text(
+                        'Logout',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmLogout == true && mounted) {
+                await AuthService().signOut();
+                if (mounted) {
+                  Navigator.pushReplacementNamed(context, '/landing');
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.green.shade700,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
           'TrashDash',
           style: TextStyle(
@@ -488,6 +684,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
         centerTitle: true,
       ),
+      drawer: _buildDrawer(context),
       body: _isLoadingLocation
           ? const Center(
               child: Column(
@@ -537,7 +734,8 @@ class _MapScreenState extends State<MapScreen> {
               myLocationEnabled: true,
               myLocationButtonEnabled: true,
               mapType: MapType.normal,
-              zoomControlsEnabled: true,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
               compassEnabled: true,
             ),
     );
