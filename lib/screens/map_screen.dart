@@ -934,10 +934,13 @@ class _MapScreenState extends State<MapScreen> {
         backgroundColor: Colors.green.shade700,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
-          'TrashDash',
+          'Trash Dash',
           style: TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
+            fontSize: 24,
+            letterSpacing: 1.2,
+            fontFamily: 'sans-serif',
           ),
         ),
         centerTitle: true,
