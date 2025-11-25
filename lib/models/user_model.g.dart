@@ -25,13 +25,14 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       createdAt: fields[5] as DateTime,
       passwordHash: fields[6] as String?,
       interestedCategories: fields[7] != null ? (fields[7] as List).cast<String>() : [],
+      savedItemIds: fields[8] != null ? (fields[8] as List).cast<String>() : [],
     );
   }
 
   @override
   void write(BinaryWriter writer, UserModel obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.uid)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       ..writeByte(6)
       ..write(obj.passwordHash)
       ..writeByte(7)
-      ..write(obj.interestedCategories);
+      ..write(obj.interestedCategories)
+      ..writeByte(8)
+      ..write(obj.savedItemIds);
   }
 
   @override

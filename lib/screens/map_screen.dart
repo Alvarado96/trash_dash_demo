@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
@@ -6,6 +7,9 @@ import 'package:trash_dash_demo/models/user_model.dart';
 import 'package:trash_dash_demo/services/local_storage_service.dart';
 import 'package:trash_dash_demo/services/auth_service.dart';
 import 'package:trash_dash_demo/screens/interested_items_screen.dart';
+import 'package:trash_dash_demo/screens/saved_items_screen.dart';
+import 'package:trash_dash_demo/screens/profile_screen.dart';
+import 'package:trash_dash_demo/screens/post_trash_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends StatefulWidget {
@@ -69,11 +73,17 @@ class _MapScreenState extends State<MapScreen> {
   void _createMarkers() {
     final currentUser = LocalStorageService.getCurrentUser();
     final userInterests = currentUser?.interestedCategories ?? [];
+    final currentUserName = currentUser != null
+        ? '${currentUser.firstName} ${currentUser.lastName}'
+        : '';
 
     _markers = _trashItems
         .where((item) => item.status != ItemStatus.pickedUp)
         .map((item) {
       final String statusText = item.status == ItemStatus.available ? 'Available' : 'Claimed';
+
+      // Check if this item was posted by current user
+      final bool isUserPosted = item.postedBy == currentUserName;
 
       // Check if this item matches user's interests
       final bool matchesInterest = userInterests.any(
@@ -82,7 +92,10 @@ class _MapScreenState extends State<MapScreen> {
 
       // Determine marker color
       double markerHue;
-      if (matchesInterest && item.status == ItemStatus.available) {
+      if (isUserPosted) {
+        // Purple/Violet for user's posted items
+        markerHue = BitmapDescriptor.hueViolet;
+      } else if (matchesInterest && item.status == ItemStatus.available) {
         // Cyan/Azure color for items matching interests and available
         markerHue = BitmapDescriptor.hueAzure;
       } else if (item.status == ItemStatus.available) {
@@ -178,6 +191,58 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Widget _buildItemImage(String imageUrl) {
+    // Check if it's a network URL or local file path
+    final bool isNetworkImage = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+
+    if (isNetworkImage) {
+      return Image.network(
+        imageUrl,
+        height: 200,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: 200,
+            color: Colors.grey.shade300,
+            child: const Icon(Icons.image_not_supported, size: 50),
+          );
+        },
+      );
+    } else {
+      // Local file
+      final file = File(imageUrl);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          height: 200,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              height: 200,
+              color: Colors.grey.shade300,
+              child: const Icon(Icons.image_not_supported, size: 50),
+            );
+          },
+        );
+      } else {
+        return Container(
+          height: 200,
+          color: Colors.grey.shade300,
+          child: const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.broken_image, size: 50, color: Colors.grey),
+              SizedBox(height: 8),
+              Text('Image not found', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _openGoogleMaps(TrashItem item) async {
     final String googleMapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=${item.location.latitude},${item.location.longitude}';
 
@@ -198,6 +263,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showItemDetails(TrashItem item) {
+    final currentUser = LocalStorageService.getCurrentUser();
+    final currentUserName = currentUser != null
+        ? '${currentUser.firstName} ${currentUser.lastName}'
+        : '';
+    final isUserPosted = item.postedBy == currentUserName;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -206,37 +277,102 @@ class _MapScreenState extends State<MapScreen> {
         minChildSize: 0.5,
         maxChildSize: 0.95,
         expand: false,
-        builder: (context, scrollController) => Container(
-          padding: const EdgeInsets.all(16),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        builder: (context, scrollController) => Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: SingleChildScrollView(
+              controller: scrollController,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                item.imageUrl,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 200,
-                    color: Colors.grey.shade300,
-                    child: const Icon(Icons.image_not_supported, size: 50),
-                  );
-                },
-              ),
+              child: _buildItemImage(item.imageUrl),
             ),
             const SizedBox(height: 16),
-            Text(
-              item.name,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                // Bookmark button
+                StatefulBuilder(
+                  builder: (context, setStateBookmark) {
+                    // Get fresh user data on each rebuild
+                    final freshUser = LocalStorageService.getCurrentUser();
+                    final isSaved = freshUser?.savedItemIds.contains(item.id) ?? false;
+
+                    return IconButton(
+                      onPressed: () async {
+                        if (freshUser == null) return;
+
+                        final updatedSavedIds = List<String>.from(freshUser.savedItemIds);
+                        if (isSaved) {
+                          updatedSavedIds.remove(item.id);
+                        } else {
+                          updatedSavedIds.add(item.id);
+                        }
+
+                        // Show snackbar immediately at bottom of screen
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isSaved ? 'Removed from saved items' : 'Saved item!'),
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 3),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+
+                        final updatedUser = UserModel(
+                          uid: freshUser.uid,
+                          email: freshUser.email,
+                          firstName: freshUser.firstName,
+                          lastName: freshUser.lastName,
+                          photoUrl: freshUser.photoUrl,
+                          createdAt: freshUser.createdAt,
+                          passwordHash: freshUser.passwordHash,
+                          interestedCategories: freshUser.interestedCategories,
+                          savedItemIds: updatedSavedIds,
+                        );
+
+                        await LocalStorageService.saveUser(updatedUser);
+
+                        // Trigger rebuild to show new state
+                        setStateBookmark(() {});
+                      },
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (child, animation) {
+                          return ScaleTransition(
+                            scale: animation,
+                            child: child,
+                          );
+                        },
+                        child: Icon(
+                          isSaved ? Icons.bookmark : Icons.bookmark_border,
+                          key: ValueKey(isSaved),
+                          color: Colors.green.shade700,
+                          size: 28,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
@@ -294,106 +430,108 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await _openGoogleMaps(item);
-                    },
-                    icon: const Icon(Icons.directions),
-                    label: const Text('Get Directions'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: BorderSide(color: Colors.blue.shade700),
-                      foregroundColor: Colors.blue.shade700,
+            // Only show directions and claim buttons for items NOT posted by current user
+            if (!isUserPosted) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _openGoogleMaps(item);
+                      },
+                      icon: const Icon(Icons.directions),
+                      label: const Text('Get Directions'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: Colors.blue.shade700),
+                        foregroundColor: Colors.blue.shade700,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (item.status == ItemStatus.available)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _currentlyClaimedItem != null
-                      ? null
-                      : () async {
-                          setState(() {
-                            item.status = ItemStatus.claimed;
-                            item.claimedBy = 'You';
-                            _currentlyClaimedItem = item;
-                          });
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (item.status == ItemStatus.available)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _currentlyClaimedItem != null
+                        ? null
+                        : () async {
+                            setState(() {
+                              item.status = ItemStatus.claimed;
+                              item.claimedBy = 'You';
+                              _currentlyClaimedItem = item;
+                            });
 
-                          // Save to Hive
-                          await LocalStorageService.updateTrashItem(item);
+                            // Save to Hive
+                            await LocalStorageService.updateTrashItem(item);
 
-                          setState(() {
-                            _createMarkers();
-                          });
+                            setState(() {
+                              _createMarkers();
+                            });
 
-                          // Capture the messenger before async gap
-                          final messenger = ScaffoldMessenger.of(context);
-                          Navigator.pop(context);
+                            // Capture the messenger before async gap
+                            final messenger = ScaffoldMessenger.of(context);
+                            Navigator.pop(context);
 
-                          // Show directions dialog
-                          final bool? wantsDirections = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Get Directions?'),
-                              content: const Text(
-                                'Would you like to open Google Maps for directions to this item?',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(context, false);
-                                  },
-                                  child: const Text('No'),
+                            // Show directions dialog
+                            final bool? wantsDirections = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Get Directions?'),
+                                content: const Text(
+                                  'Would you like to open Google Maps for directions to this item?',
                                 ),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(context, true);
-                                  },
-                                  child: const Text('Yes'),
-                                ),
-                              ],
-                            ),
-                          );
-
-                          if (wantsDirections == true) {
-                            await _openGoogleMaps(item);
-                          } else if (wantsDirections == false) {
-                            // Only show snackbar if user clicked "No"
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('Item claimed! Head over to pick it up.'),
-                                backgroundColor: Colors.green,
-                                duration: Duration(seconds: 2),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context, false);
+                                    },
+                                    child: const Text('No'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context, true);
+                                    },
+                                    child: const Text('Yes'),
+                                  ),
+                                ],
                               ),
                             );
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _currentlyClaimedItem != null
-                        ? Colors.grey
-                        : Colors.green.shade700,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+
+                            if (wantsDirections == true) {
+                              await _openGoogleMaps(item);
+                            } else if (wantsDirections == false) {
+                              // Only show snackbar if user clicked "No"
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Item claimed! Head over to pick it up.'),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _currentlyClaimedItem != null
+                          ? Colors.grey
+                          : Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: Text(
+                      _currentlyClaimedItem != null
+                          ? "Already on the way to another item"
+                          : "I'm on my way!",
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  child: Text(
-                    _currentlyClaimedItem != null
-                        ? "Already on the way to another item"
-                        : "I'm on my way!",
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              )
-            else if (item.claimedBy == 'You')
-              Column(
+                )
+              else if (item.claimedBy == 'You')
+                Column(
                 children: [
                   SizedBox(
                     width: double.infinity,
@@ -473,25 +611,95 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ],
               )
-            else
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(8),
+              else if (item.claimedBy != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${item.claimedBy} is on the way for this item',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
-                child: Text(
-                  '${item.claimedBy} is on the way for this item',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.orange.shade700,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
+            ],
+            // Show "Mark as Picked Up" button for poster anytime (claimed or available)
+            if (isUserPosted && (item.status == ItemStatus.available || item.status == ItemStatus.claimed)) ...[
+              const SizedBox(height: 16),
+              // Show who claimed it if applicable
+              if (item.status == ItemStatus.claimed && item.claimedBy != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Text(
+                    '${item.claimedBy} claimed this item',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              if (item.status == ItemStatus.claimed && item.claimedBy != null)
+                const SizedBox(height: 12),
+              // Always show "Mark as Picked Up" button for poster
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    // Capture messenger before async gap
+                    final messenger = ScaffoldMessenger.of(context);
+
+                    setState(() {
+                      item.status = ItemStatus.pickedUp;
+                    });
+
+                    // Save to Hive
+                    await LocalStorageService.updateTrashItem(item);
+
+                    setState(() {
+                      _createMarkers();
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Item marked as picked up!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade700,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text(
+                    "Mark as Picked Up",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
-              ],
+              const SizedBox(height: 16),
+            ],
+                ],
+              ),
             ),
           ),
         ),
@@ -639,10 +847,10 @@ class _MapScreenState extends State<MapScreen> {
             title: const Text('Profile'),
             onTap: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Profile screen coming soon!'),
-                  duration: Duration(seconds: 2),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProfileScreen(),
                 ),
               );
             },
@@ -657,6 +865,20 @@ class _MapScreenState extends State<MapScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const InterestedItemsScreen(),
+                ),
+              );
+            },
+          ),
+          // Saved Items option
+          ListTile(
+            leading: const Icon(Icons.bookmark),
+            title: const Text('Saved Items'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SavedItemsScreen(),
                 ),
               );
             },
@@ -721,6 +943,28 @@ class _MapScreenState extends State<MapScreen> {
         centerTitle: true,
       ),
       drawer: _buildDrawer(context),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const PostTrashScreen(),
+            ),
+          );
+
+          // If item was posted successfully, reload trash items
+          if (result == true) {
+            _loadTrashItems();
+          }
+        },
+        backgroundColor: Colors.green.shade700,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'Post Item',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: _isLoadingLocation
           ? const Center(
               child: Column(
@@ -734,45 +978,77 @@ class _MapScreenState extends State<MapScreen> {
                 ],
               ),
             )
-          : GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: _currentPosition ?? const LatLng(38.8339, -104.8214),
-                zoom: 13.0,
-              ),
-              onMapCreated: (GoogleMapController controller) {
-                _mapController = controller;
-              },
-              onCameraMove: (CameraPosition position) {
-                // Only update if zoom level changed significantly
-                if ((position.zoom - _currentZoom).abs() > 0.1) {
-                  setState(() {
-                    _currentZoom = position.zoom;
-                  });
+          : Stack(
+              children: [
+                GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _currentPosition ?? const LatLng(38.8339, -104.8214),
+                    zoom: 13.0,
+                  ),
+                  onMapCreated: (GoogleMapController controller) {
+                    _mapController = controller;
+                  },
+                  onCameraMove: (CameraPosition position) {
+                    // Only update if zoom level changed significantly
+                    if ((position.zoom - _currentZoom).abs() > 0.1) {
+                      setState(() {
+                        _currentZoom = position.zoom;
+                      });
 
-                  // Show info windows when zoomed in close enough
-                  if (position.zoom >= 15.0 && !_infoWindowsVisible) {
-                    _infoWindowsVisible = true;
-                    _showInfoWindowsForVisibleMarkers();
-                  } else if (position.zoom < 15.0 && _infoWindowsVisible) {
-                    // Hide info windows when zoomed out
-                    _infoWindowsVisible = false;
-                    _hideAllInfoWindows();
-                  }
-                }
-              },
-              onCameraIdle: () {
-                // Update info windows when camera stops moving (after pan/zoom)
-                if (_currentZoom >= 15.0) {
-                  _showInfoWindowsForVisibleMarkers();
-                }
-              },
-              markers: _markers,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-              mapType: MapType.normal,
-              zoomControlsEnabled: false,
-              mapToolbarEnabled: false,
-              compassEnabled: true,
+                      // Show info windows when zoomed in close enough
+                      if (position.zoom >= 15.0 && !_infoWindowsVisible) {
+                        _infoWindowsVisible = true;
+                        _showInfoWindowsForVisibleMarkers();
+                      } else if (position.zoom < 15.0 && _infoWindowsVisible) {
+                        // Hide info windows when zoomed out
+                        _infoWindowsVisible = false;
+                        _hideAllInfoWindows();
+                      }
+                    }
+                  },
+                  onCameraIdle: () {
+                    // Update info windows when camera stops moving (after pan/zoom)
+                    if (_currentZoom >= 15.0) {
+                      _showInfoWindowsForVisibleMarkers();
+                    }
+                  },
+                  markers: _markers,
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                  mapType: MapType.normal,
+                  zoomControlsEnabled: false,
+                  mapToolbarEnabled: false,
+                  compassEnabled: true,
+                ),
+                // Custom location button with green theme
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: Material(
+                    elevation: 4,
+                    shape: const CircleBorder(),
+                    child: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: Colors.green.shade700,
+                      child: IconButton(
+                        icon: const Icon(Icons.my_location, color: Colors.white),
+                        onPressed: () {
+                          if (_currentPosition != null) {
+                            _mapController?.animateCamera(
+                              CameraUpdate.newCameraPosition(
+                                CameraPosition(
+                                  target: _currentPosition!,
+                                  zoom: 15.0,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
     );
   }

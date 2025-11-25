@@ -28,6 +28,9 @@ class UserModel extends HiveObject {
   @HiveField(7)
   final List<String> interestedCategories;
 
+  @HiveField(8)
+  final List<String> savedItemIds;
+
   UserModel({
     required this.uid,
     required this.email,
@@ -37,6 +40,7 @@ class UserModel extends HiveObject {
     required this.createdAt,
     this.passwordHash,
     this.interestedCategories = const [],
+    this.savedItemIds = const [],
   });
 
   String get fullName => '$firstName $lastName';
