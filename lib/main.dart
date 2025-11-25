@@ -29,8 +29,37 @@ void main() async {
   runApp(const TrashDashApp());
 }
 
-class TrashDashApp extends StatelessWidget {
+class TrashDashApp extends StatefulWidget {
   const TrashDashApp({super.key});
+
+  @override
+  State<TrashDashApp> createState() => _TrashDashAppState();
+}
+
+class _TrashDashAppState extends State<TrashDashApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThemeMode();
+  }
+
+  void _loadThemeMode() {
+    final settingsBox = Hive.box('currentUser');
+    final isDark = settingsBox.get('isDarkMode', defaultValue: false);
+    setState(() {
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    });
+  }
+
+  void toggleTheme(bool isDark) {
+    final settingsBox = Hive.box('currentUser');
+    settingsBox.put('isDarkMode', isDark);
+    setState(() {
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,9 +67,20 @@ class TrashDashApp extends StatelessWidget {
       title: 'TrashDash',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.green,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.green,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      themeMode: _themeMode,
       home: ValueListenableBuilder(
         valueListenable: Hive.box('currentUser').listenable(),
         builder: (context, box, widget) {
@@ -48,7 +88,7 @@ class TrashDashApp extends StatelessWidget {
 
           // If user is signed in, show map screen
           if (currentUserId != null) {
-            return const MapScreen();
+            return MapScreen(onThemeToggle: toggleTheme);
           }
 
           // Otherwise show landing screen
@@ -56,7 +96,7 @@ class TrashDashApp extends StatelessWidget {
         },
       ),
       routes: {
-        '/map': (context) => const MapScreen(),
+        '/map': (context) => MapScreen(onThemeToggle: toggleTheme),
         '/landing': (context) => const LandingScreen(),
       },
     );

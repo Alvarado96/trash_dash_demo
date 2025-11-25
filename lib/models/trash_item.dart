@@ -78,6 +78,9 @@ class TrashItem extends HiveObject {
   @HiveField(10)
   String? claimedBy;
 
+  @HiveField(11)
+  final bool isCurbside;
+
   LatLng get location => LatLng(latitude, longitude);
 
   TrashItem({
@@ -91,6 +94,7 @@ class TrashItem extends HiveObject {
     required this.postedAt,
     this.status = ItemStatus.available,
     this.claimedBy,
+    this.isCurbside = false,
   })  : latitude = location.latitude,
         longitude = location.longitude;
 
@@ -107,6 +111,7 @@ class TrashItem extends HiveObject {
     required this.postedAt,
     this.status = ItemStatus.available,
     this.claimedBy,
+    required this.isCurbside,
   });
 
   String get categoryName {

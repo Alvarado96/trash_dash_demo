@@ -14,8 +14,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends StatefulWidget {
   final TrashItem? selectedItem;
+  final Function(bool)? onThemeToggle;
 
-  const MapScreen({super.key, this.selectedItem});
+  const MapScreen({super.key, this.selectedItem, this.onThemeToggle});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -73,6 +74,7 @@ class _MapScreenState extends State<MapScreen> {
   void _createMarkers() {
     final currentUser = LocalStorageService.getCurrentUser();
     final userInterests = currentUser?.interestedCategories ?? [];
+    final userSavedIds = currentUser?.savedItemIds ?? [];
     final currentUserName = currentUser != null
         ? '${currentUser.firstName} ${currentUser.lastName}'
         : '';
@@ -85,16 +87,28 @@ class _MapScreenState extends State<MapScreen> {
       // Check if this item was posted by current user
       final bool isUserPosted = item.postedBy == currentUserName;
 
+      // Check if user is on the way for this item
+      final bool isUserOnTheWay = item.claimedBy == 'You';
+
+      // Check if user has saved this item
+      final bool isSaved = userSavedIds.contains(item.id);
+
       // Check if this item matches user's interests
       final bool matchesInterest = userInterests.any(
         (interest) => interest.toLowerCase() == item.categoryName.toLowerCase()
       );
 
-      // Determine marker color
+      // Determine marker color (priority order)
       double markerHue;
-      if (isUserPosted) {
+      if (isUserOnTheWay) {
+        // Yellow/Gold for items user is on the way for
+        markerHue = BitmapDescriptor.hueYellow;
+      } else if (isUserPosted) {
         // Purple/Violet for user's posted items
         markerHue = BitmapDescriptor.hueViolet;
+      } else if (isSaved) {
+        // Blue for saved items
+        markerHue = BitmapDescriptor.hueBlue;
       } else if (matchesInterest && item.status == ItemStatus.available) {
         // Cyan/Azure color for items matching interests and available
         markerHue = BitmapDescriptor.hueAzure;
@@ -282,7 +296,7 @@ class _MapScreenState extends State<MapScreen> {
           body: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).scaffoldBackgroundColor,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: SingleChildScrollView(
@@ -375,7 +389,9 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -391,7 +407,6 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -410,6 +425,32 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
+                if (item.isCurbside)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade100,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.local_shipping,
+                          size: 16,
+                          color: Colors.blue.shade700,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Curbside Pickup',
+                          style: TextStyle(
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
             if (item.description != null) ...[
@@ -882,6 +923,23 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               );
             },
+          ),
+          const Divider(),
+          // Dark Mode Toggle
+          ListTile(
+            leading: Icon(
+              Theme.of(context).brightness == Brightness.dark
+                  ? Icons.light_mode
+                  : Icons.dark_mode,
+            ),
+            title: const Text('Dark Mode'),
+            trailing: Switch(
+              value: Theme.of(context).brightness == Brightness.dark,
+              onChanged: (value) {
+                widget.onThemeToggle?.call(value);
+              },
+              activeColor: Colors.green.shade700,
+            ),
           ),
           const Divider(),
           // Logout option

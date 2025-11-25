@@ -28,13 +28,14 @@ class TrashItemAdapter extends TypeAdapter<TrashItem> {
       postedAt: fields[8] as DateTime,
       status: fields[9] as ItemStatus,
       claimedBy: fields[10] as String?,
+      isCurbside: fields[11] != null ? fields[11] as bool : false,
     );
   }
 
   @override
   void write(BinaryWriter writer, TrashItem obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -56,7 +57,9 @@ class TrashItemAdapter extends TypeAdapter<TrashItem> {
       ..writeByte(9)
       ..write(obj.status)
       ..writeByte(10)
-      ..write(obj.claimedBy);
+      ..write(obj.claimedBy)
+      ..writeByte(11)
+      ..write(obj.isCurbside);
   }
 
   @override

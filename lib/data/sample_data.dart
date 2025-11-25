@@ -26,6 +26,7 @@ class SampleData {
       postedBy: 'Mike Thompson',
       postedAt: DateTime.now().subtract(const Duration(hours: 2)),
       status: ItemStatus.available,
+      isCurbside: true,
     ),
     TrashItem(
       id: '2',
@@ -37,6 +38,7 @@ class SampleData {
       postedBy: 'Sarah Johnson',
       postedAt: DateTime.now().subtract(const Duration(hours: 5)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '3',
@@ -49,6 +51,7 @@ class SampleData {
       postedAt: DateTime.now().subtract(const Duration(hours: 1)),
       status: ItemStatus.claimed,
       claimedBy: 'Tom Wilson',
+      isCurbside: true,
     ),
     TrashItem(
       id: '4',
@@ -60,6 +63,7 @@ class SampleData {
       postedBy: 'James Rodriguez',
       postedAt: DateTime.now().subtract(const Duration(hours: 3)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '5',
@@ -71,6 +75,7 @@ class SampleData {
       postedBy: 'Rachel Chen',
       postedAt: DateTime.now().subtract(const Duration(minutes: 45)),
       status: ItemStatus.available,
+      isCurbside: true,
     ),
     TrashItem(
       id: '6',
@@ -82,6 +87,7 @@ class SampleData {
       postedBy: 'Amanda White',
       postedAt: DateTime.now().subtract(const Duration(hours: 4)),
       status: ItemStatus.available,
+      isCurbside: true,
     ),
     TrashItem(
       id: '7',
@@ -93,6 +99,7 @@ class SampleData {
       postedBy: 'David Anderson',
       postedAt: DateTime.now().subtract(const Duration(hours: 6)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '8',
@@ -105,6 +112,7 @@ class SampleData {
       postedAt: DateTime.now().subtract(const Duration(minutes: 30)),
       status: ItemStatus.claimed,
       claimedBy: 'Mark Davis',
+      isCurbside: true,
     ),
     TrashItem(
       id: '9',
@@ -116,6 +124,7 @@ class SampleData {
       postedBy: 'Lisa Brown',
       postedAt: DateTime.now().subtract(const Duration(hours: 7)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '10',
@@ -127,6 +136,7 @@ class SampleData {
       postedBy: 'Robert Garcia',
       postedAt: DateTime.now().subtract(const Duration(hours: 8)),
       status: ItemStatus.available,
+      isCurbside: true,
     ),
     TrashItem(
       id: '11',
@@ -138,6 +148,7 @@ class SampleData {
       postedBy: 'Patricia Wilson',
       postedAt: DateTime.now().subtract(const Duration(minutes: 90)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '12',
@@ -149,6 +160,7 @@ class SampleData {
       postedBy: 'Daniel Miller',
       postedAt: DateTime.now().subtract(const Duration(hours: 12)),
       status: ItemStatus.available,
+      isCurbside: true,
     ),
     TrashItem(
       id: '13',
@@ -160,6 +172,7 @@ class SampleData {
       postedBy: 'Michelle Taylor',
       postedAt: DateTime.now().subtract(const Duration(hours: 4)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '14',
@@ -171,6 +184,7 @@ class SampleData {
       postedBy: 'Kevin Moore',
       postedAt: DateTime.now().subtract(const Duration(hours: 10)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '15',
@@ -183,6 +197,7 @@ class SampleData {
       postedAt: DateTime.now().subtract(const Duration(minutes: 120)),
       status: ItemStatus.claimed,
       claimedBy: 'Chris Jackson',
+      isCurbside: false,
     ),
     TrashItem(
       id: '16',
@@ -194,6 +209,7 @@ class SampleData {
       postedBy: 'Steven Martinez',
       postedAt: DateTime.now().subtract(const Duration(hours: 3)),
       status: ItemStatus.available,
+      isCurbside: true,
     ),
     TrashItem(
       id: '17',
@@ -205,6 +221,7 @@ class SampleData {
       postedBy: 'Nancy Harris',
       postedAt: DateTime.now().subtract(const Duration(hours: 5)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '18',
@@ -216,6 +233,7 @@ class SampleData {
       postedBy: 'Brian Clark',
       postedAt: DateTime.now().subtract(const Duration(hours: 9)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '19',
@@ -227,6 +245,7 @@ class SampleData {
       postedBy: 'Laura Robinson',
       postedAt: DateTime.now().subtract(const Duration(minutes: 75)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
     TrashItem(
       id: '20',
@@ -238,6 +257,7 @@ class SampleData {
       postedBy: 'Matthew Lewis',
       postedAt: DateTime.now().subtract(const Duration(hours: 2)),
       status: ItemStatus.available,
+      isCurbside: false,
     ),
   ];
 

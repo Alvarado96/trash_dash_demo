@@ -24,6 +24,7 @@ class _PostTrashScreenState extends State<PostTrashScreen> {
   File? _selectedImage;
   LatLng? _selectedLocation;
   bool _isLoading = false;
+  bool _isCurbside = false;
   List<Location> _addressSuggestions = [];
   Map<String, String> _addressDisplayNames = {}; // Maps location key to formatted address
   bool _showSuggestions = false;
@@ -279,6 +280,7 @@ class _PostTrashScreenState extends State<PostTrashScreen> {
         postedBy: '${currentUser.firstName} ${currentUser.lastName}',
         postedAt: DateTime.now(),
         status: ItemStatus.available,
+        isCurbside: _isCurbside,
       );
 
       await LocalStorageService.saveTrashItem(newItem);
@@ -517,6 +519,31 @@ class _PostTrashScreenState extends State<PostTrashScreen> {
                           ),
                         ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Curbside pickup checkbox
+                  CheckboxListTile(
+                    value: _isCurbside,
+                    onChanged: (value) {
+                      setState(() {
+                        _isCurbside = value ?? false;
+                      });
+                    },
+                    title: const Text(
+                      'Curbside Pickup',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'This item will be left on the curb for easy pickup',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    activeColor: Colors.green.shade700,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
                   ),
                   const SizedBox(height: 24),
 
