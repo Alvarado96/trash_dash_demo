@@ -6,6 +6,9 @@ import 'package:trash_dash_demo/models/user_model.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
 import 'package:trash_dash_demo/data/sample_data.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -26,6 +29,10 @@ void main() async {
   // Initialize sample data
   await SampleData.initializeSampleData();
 
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const TrashDashApp());
 }
 
