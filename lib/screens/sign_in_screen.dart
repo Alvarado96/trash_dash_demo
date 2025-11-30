@@ -171,6 +171,23 @@ class _SignInScreenState extends State<SignInScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 8),
+                // Forgot Password Link
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () {
+                      // TODO: Implement forgot password with Firebase
+                    },
+                    child: Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 // Sign In Button
                 ElevatedButton(
