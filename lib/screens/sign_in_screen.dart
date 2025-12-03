@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:trash_dash_demo/services/hive_auth_service.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
 import 'package:trash_dash_demo/screens/sign_up_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -31,7 +31,7 @@ class _SignInScreenState extends State<SignInScreen> {
     });
 
     try {
-      final user = await AuthService().signInWithEmail(
+      final user = await AuthService().signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
