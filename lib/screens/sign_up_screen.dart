@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:trash_dash_demo/services/auth_service.dart';
 
@@ -18,7 +19,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-
+  String errorMessage = '';
   // Available categories
   final List<String> _availableCategories = [
     'Furniture',
@@ -48,34 +49,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  Future<void> _signUpWithEmail() async {
-    if (!_formKey.currentState!.validate()) return;
+  String? _emailErrorText;
 
+  void _validateAndSignUp() {
+    if (_formKey.currentState!.validate()) {
+      _signUpWithEmail();
+    }
+  }
+
+  void _signUpWithEmail() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() {
       _isLoading = true;
     });
-
     try {
-      final user = await AuthService().signUpWithEmail(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        firstName: _firstNameController.text.trim(),
-        lastName: _lastNameController.text.trim(),
-        interestedCategories: _selectedCategories.toList(),
-      );
-
+      final user = await authService.value.createAccount(
+          email: _emailController.text, password: _passwordController.text);
       if (user != null && mounted) {
         Navigator.pushReplacementNamed(context, '/map');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sign up failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    } on FirebaseAuthException catch (e) {
+      print(e.message);
     } finally {
       if (mounted) {
         setState(() {
@@ -84,6 +78,42 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
     }
   }
+  // Future<void> _signUpWithEmail() async {
+  //   if (!_formKey.currentState!.validate()) return;
+
+  //   setState(() {
+  //     _isLoading = true;
+  //   });
+
+  //   try {
+  //     final user = await AuthService().signUpWithEmail(
+  //       email: _emailController.text.trim(),
+  //       password: _passwordController.text,
+  //       firstName: _firstNameController.text.trim(),
+  //       lastName: _lastNameController.text.trim(),
+  //       interestedCategories: _selectedCategories.toList(),
+  //     );
+
+  //     if (user != null && mounted) {
+  //       Navigator.pushReplacementNamed(context, '/map');
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Text('Sign up failed: ${e.toString()}'),
+  //           backgroundColor: Colors.red,
+  //         ),
+  //       );
+  //     }
+  //   } finally {
+  //     if (mounted) {
+  //       setState(() {
+  //         _isLoading = false;
+  //       });
+  //     }
+  //   }
+  // }
 
   Future<void> _signUpWithGoogle() async {
     setState(() {
@@ -188,8 +218,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   decoration: InputDecoration(
                     labelText: 'Email',
+                    errorText: _emailErrorText,
+                    errorStyle: const TextStyle(color: Colors.red),
                     prefixIcon: const Icon(Icons.email_outlined),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -215,7 +248,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
                       onPressed: () {
                         setState(() {
@@ -232,7 +267,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       return 'Please enter a password';
                     }
                     if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
+                      return 'Password must be at least 8 characters';
                     }
                     return null;
                   },
@@ -247,7 +282,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
                       onPressed: () {
                         setState(() {
@@ -308,8 +345,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       selectedColor: Colors.green.shade100,
                       checkmarkColor: Colors.green.shade700,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.green.shade700 : Colors.grey.shade700,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        color: isSelected
+                            ? Colors.green.shade700
+                            : Colors.grey.shade700,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
                       ),
                     );
                   }).toList(),
@@ -317,7 +357,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 const SizedBox(height: 24),
                 // Sign Up Button
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _signUpWithEmail,
+                  onPressed: _isLoading ? null : _validateAndSignUp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green.shade700,
                     foregroundColor: Colors.white,

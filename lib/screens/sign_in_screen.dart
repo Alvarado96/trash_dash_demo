@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:trash_dash_demo/services/auth_service.dart';
+import 'package:trash_dash_demo/services/hive_auth_service.dart';
 import 'package:trash_dash_demo/screens/sign_up_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -152,7 +152,9 @@ class _SignInScreenState extends State<SignInScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
                       onPressed: () {
                         setState(() {
