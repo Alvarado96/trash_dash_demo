@@ -4,12 +4,16 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
 import 'package:trash_dash_demo/models/user_model.dart';
+import 'package:trash_dash_demo/models/conversation.dart';
 import 'package:trash_dash_demo/services/local_storage_service.dart';
 import 'package:trash_dash_demo/services/hive_auth_service.dart';
+import 'package:trash_dash_demo/services/chat_service.dart';
 import 'package:trash_dash_demo/screens/interested_items_screen.dart';
 import 'package:trash_dash_demo/screens/saved_items_screen.dart';
 import 'package:trash_dash_demo/screens/profile_screen.dart';
 import 'package:trash_dash_demo/screens/post_trash_screen.dart';
+import 'package:trash_dash_demo/screens/conversation_list_screen.dart';
+import 'package:trash_dash_demo/screens/chat_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends StatefulWidget {
@@ -512,6 +516,68 @@ class _MapScreenState extends State<MapScreen> {
                         ),
                       ],
                     ),
+                    // Show "Message Poster" button for non-curbside items
+                    if (!item.isCurbside) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            // Get current user info
+                            final currentUser = LocalStorageService.getCurrentUser();
+                            if (currentUser == null) return;
+                            
+                            final currentUserName = '${currentUser.firstName} ${currentUser.lastName}';
+                            
+                            // We need to find the poster's user ID
+                            // Since we only have the poster's name, we need to search for their user
+                            final allUsers = LocalStorageService.getAllUsers();
+                            final posterUser = allUsers.where((u) => 
+                              '${u.firstName} ${u.lastName}' == item.postedBy
+                            ).toList();
+                            
+                            if (posterUser.isEmpty) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Unable to find poster\'s account'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                            
+                            // Get or create conversation
+                            final conversation = await ChatService.getOrCreateConversation(
+                              itemId: item.id,
+                              itemName: item.name,
+                              currentUserId: currentUser.uid,
+                              currentUserName: currentUserName,
+                              otherUserId: posterUser.first.uid,
+                              otherUserName: item.postedBy,
+                            );
+                            
+                            if (mounted) {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatScreen(conversation: conversation),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.message),
+                          label: const Text('Message Poster'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            side: BorderSide(color: Colors.green.shade700),
+                            foregroundColor: Colors.green.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     if (item.status == ItemStatus.available)
                       SizedBox(
@@ -956,6 +1022,20 @@ class _MapScreenState extends State<MapScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const SavedItemsScreen(),
+                ),
+              );
+            },
+          ),
+          // Messages option
+          ListTile(
+            leading: const Icon(Icons.message),
+            title: const Text('Messages'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ConversationListScreen(),
                 ),
               );
             },

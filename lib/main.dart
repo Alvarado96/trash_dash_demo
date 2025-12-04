@@ -4,6 +4,8 @@ import 'package:trash_dash_demo/screens/landing_screen.dart';
 import 'package:trash_dash_demo/screens/map_screen.dart';
 import 'package:trash_dash_demo/models/user_model.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
+import 'package:trash_dash_demo/models/message.dart';
+import 'package:trash_dash_demo/models/conversation.dart';
 import 'package:trash_dash_demo/data/sample_data.dart';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -20,11 +22,15 @@ void main() async {
   Hive.registerAdapter(TrashItemAdapter());
   Hive.registerAdapter(ItemStatusAdapter());
   Hive.registerAdapter(ItemCategoryAdapter());
+  Hive.registerAdapter(MessageAdapter());
+  Hive.registerAdapter(ConversationAdapter());
 
   // Open Hive boxes
   await Hive.openBox<UserModel>('users');
   await Hive.openBox<TrashItem>('trashItems');
   await Hive.openBox('currentUser'); // For storing current user ID
+  await Hive.openBox<Message>('messages');
+  await Hive.openBox<Conversation>('conversations');
 
   // Initialize sample data
   await SampleData.initializeSampleData();

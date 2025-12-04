@@ -10,6 +10,8 @@ Trash Dash, an app that allows users to post their trash and other people can co
 - Automatic info windows when zoomed in
 - Direct integration with Google Maps for navigation
 - Item categories: Furniture, Electronics, Clothing, Books, Toys, Appliances, Decorations, and more
+- **In-app messaging**: Message posters directly for non-curbside items to arrange pickup times
+- Curbside pickup option for items left outside
 
 ## Getting Started
 
@@ -26,3 +28,5 @@ Trash Dash, an app that allows users to post their trash and other people can co
 - Google Maps Flutter ^2.10.0
 - Location Services ^7.0.0
 - URL Launcher ^6.3.0
+- Firebase (Auth, Firestore, Storage)
+- Hive for local storage
