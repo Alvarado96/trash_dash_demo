@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>278762312332-4thm9mktbp1l4ikh8fdhaasgr30k8qi9.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.278762312332-4thm9mktbp1l4ikh8fdhaasgr30k8qi9</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>278762312332-q0v28ic6jbvo0bdeetuennqu2jodue4d.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyDIdKwUjbSHaRqMGt99JdkL049i2-A9Ayo</string>
+	<key>GCM_SENDER_ID</key>
+	<string>278762312332</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.trashDashDemo</string>
+	<key>PROJECT_ID</key>
+	<string>trash-dash-demo</string>
+	<key>STORAGE_BUCKET</key>
+	<string>trash-dash-demo.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:278762312332:ios:807d020f9c3fa3cb9261a9</string>
+</dict>
+</plist>

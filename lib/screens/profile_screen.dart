@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:trash_dash_demo/models/user_model.dart';
-import 'package:trash_dash_demo/services/local_storage_service.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
+import 'package:trash_dash_demo/services/firestore_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -13,6 +14,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   UserModel? _currentUser;
   Set<String> _selectedCategories = {};
   bool _isEditing = false;
+  bool _isLoading = true;
 
   final List<String> _availableCategories = [
     'Furniture',
@@ -35,11 +37,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserData();
   }
 
-  void _loadUserData() {
-    _currentUser = LocalStorageService.getCurrentUser();
-    if (_currentUser != null) {
+  Future<void> _loadUserData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final user = await AuthService().getCurrentUserData();
+    if (user != null) {
       setState(() {
-        _selectedCategories = Set.from(_currentUser!.interestedCategories);
+        _currentUser = user;
+        _selectedCategories = Set.from(user.interestedCategories);
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
       });
     }
   }
@@ -47,39 +59,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveCategories() async {
     if (_currentUser == null) return;
 
-    // Update user model with new categories
-    final updatedUser = UserModel(
-      uid: _currentUser!.uid,
-      email: _currentUser!.email,
-      firstName: _currentUser!.firstName,
-      lastName: _currentUser!.lastName,
-      photoUrl: _currentUser!.photoUrl,
-      createdAt: _currentUser!.createdAt,
-      passwordHash: _currentUser!.passwordHash,
-      interestedCategories: _selectedCategories.toList(),
-    );
-
-    // Save to Hive
-    await LocalStorageService.saveUser(updatedUser);
-
-    setState(() {
-      _currentUser = updatedUser;
-      _isEditing = false;
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Categories updated successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
+    try {
+      // Update categories in Firestore
+      await FirestoreService.updateInterestedCategories(
+        _currentUser!.uid,
+        _selectedCategories.toList(),
       );
+
+      // Update local state
+      setState(() {
+        _currentUser = _currentUser!.copyWith(
+          interestedCategories: _selectedCategories.toList(),
+        );
+        _isEditing = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Categories updated successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating categories: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Profile'),
+          backgroundColor: Colors.green.shade700,
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(
+            color: Colors.green,
+          ),
+        ),
+      );
+    }
+
     if (_currentUser == null) {
       return Scaffold(
         appBar: AppBar(

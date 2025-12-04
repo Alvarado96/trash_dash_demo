@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:trash_dash_demo/services/auth_service.dart';
 
@@ -56,7 +57,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     });
 
     try {
-      final user = await AuthService().signUpWithEmail(
+      final user = await AuthService().createAccount(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         firstName: _firstNameController.text.trim(),
@@ -66,6 +67,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       if (user != null && mounted) {
         Navigator.pushReplacementNamed(context, '/map');
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign up failed: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -188,6 +198,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   decoration: InputDecoration(
                     labelText: 'Email',
                     prefixIcon: const Icon(Icons.email_outlined),
@@ -215,7 +226,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
                       onPressed: () {
                         setState(() {
@@ -232,7 +245,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       return 'Please enter a password';
                     }
                     if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
+                      return 'Password must be at least 8 characters';
                     }
                     return null;
                   },
@@ -247,7 +260,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
                       onPressed: () {
                         setState(() {
@@ -308,8 +323,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       selectedColor: Colors.green.shade100,
                       checkmarkColor: Colors.green.shade700,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.green.shade700 : Colors.grey.shade700,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        color: isSelected
+                            ? Colors.green.shade700
+                            : Colors.grey.shade700,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
                       ),
                     );
                   }).toList(),

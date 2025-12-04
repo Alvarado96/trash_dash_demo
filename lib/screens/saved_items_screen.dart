@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
 import 'package:trash_dash_demo/models/user_model.dart';
-import 'package:trash_dash_demo/services/local_storage_service.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
+import 'package:trash_dash_demo/services/firestore_service.dart';
 import 'package:trash_dash_demo/screens/map_screen.dart';
 
 class SavedItemsScreen extends StatefulWidget {
@@ -22,13 +23,13 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
     _loadSavedItems();
   }
 
-  void _loadSavedItems() {
+  Future<void> _loadSavedItems() async {
     setState(() {
       _isLoading = true;
     });
 
-    _currentUser = LocalStorageService.getCurrentUser();
-    final allItems = LocalStorageService.getAllTrashItems();
+    _currentUser = await AuthService().getCurrentUserData();
+    final allItems = await FirestoreService.getAllTrashItems();
 
     if (_currentUser != null && _currentUser!.savedItemIds.isNotEmpty) {
       // Filter items based on user's saved item IDs
@@ -42,9 +43,11 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
       _savedItems = [];
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   String _formatTimeAgo(DateTime dateTime) {
@@ -209,7 +212,7 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
                       Icon(Icons.person_outline, size: 16, color: Colors.grey.shade600),
                       const SizedBox(width: 4),
                       Text(
-                        item.postedBy,
+                        item.postedByName,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,

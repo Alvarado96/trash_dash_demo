@@ -1,84 +1,41 @@
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:hive/hive.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-part 'trash_item.g.dart';
-
-@HiveType(typeId: 1)
 enum ItemStatus {
-  @HiveField(0)
   available,
-  @HiveField(1)
   claimed,
-  @HiveField(2)
   pickedUp,
 }
 
-@HiveType(typeId: 2)
 enum ItemCategory {
-  @HiveField(0)
   furniture,
-  @HiveField(1)
   electronics,
-  @HiveField(2)
   clothing,
-  @HiveField(3)
   books,
-  @HiveField(4)
   toys,
-  @HiveField(5)
   appliances,
-  @HiveField(6)
   decorations,
-  @HiveField(7)
   other,
-  @HiveField(8)
   tools,
-  @HiveField(9)
   bookshelf,
-  @HiveField(10)
   table,
-  @HiveField(11)
   chair,
-  @HiveField(12)
   generalTrash,
 }
 
-@HiveType(typeId: 3)
-class TrashItem extends HiveObject {
-  @HiveField(0)
+class TrashItem {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final ItemCategory category;
-
-  @HiveField(3)
   final String? description;
-
-  @HiveField(4)
   final String imageUrl;
-
-  @HiveField(5)
   final double latitude;
-
-  @HiveField(6)
   final double longitude;
-
-  @HiveField(7)
-  final String postedBy;
-
-  @HiveField(8)
+  final String postedByUserId;
+  final String postedByName;
   final DateTime postedAt;
-
-  @HiveField(9)
   ItemStatus status;
-
-  @HiveField(10)
-  String? claimedBy;
-
-  @HiveField(11)
+  String? claimedByUserId;
   final bool isCurbside;
 
   LatLng get location => LatLng(latitude, longitude);
@@ -90,16 +47,17 @@ class TrashItem extends HiveObject {
     this.description,
     required this.imageUrl,
     required LatLng location,
-    required this.postedBy,
+    required this.postedByUserId,
+    required this.postedByName,
     required this.postedAt,
     this.status = ItemStatus.available,
-    this.claimedBy,
+    this.claimedByUserId,
     this.isCurbside = false,
   })  : latitude = location.latitude,
         longitude = location.longitude;
 
-  // Constructor for Hive deserialization
-  TrashItem._({
+  // Constructor for direct latitude/longitude values
+  TrashItem._fromCoordinates({
     required this.id,
     required this.name,
     required this.category,
@@ -107,10 +65,11 @@ class TrashItem extends HiveObject {
     required this.imageUrl,
     required this.latitude,
     required this.longitude,
-    required this.postedBy,
+    required this.postedByUserId,
+    required this.postedByName,
     required this.postedAt,
     this.status = ItemStatus.available,
-    this.claimedBy,
+    this.claimedByUserId,
     required this.isCurbside,
   });
 
@@ -145,6 +104,80 @@ class TrashItem extends HiveObject {
     }
   }
 
+  /// Converts the TrashItem to a Map for Firestore
+  Map<String, dynamic> toFirestore() {
+    return {
+      'id': id,
+      'name': name,
+      'category': category.name,
+      'description': description,
+      'imageUrl': imageUrl,
+      'latitude': latitude,
+      'longitude': longitude,
+      'postedByUserId': postedByUserId,
+      'postedByName': postedByName,
+      'postedAt': Timestamp.fromDate(postedAt),
+      'status': status.name,
+      'claimedByUserId': claimedByUserId,
+      'isCurbside': isCurbside,
+    };
+  }
+
+  /// Creates a TrashItem from a Firestore DocumentSnapshot
+  factory TrashItem.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return TrashItem._fromCoordinates(
+      id: doc.id,
+      name: data['name'] ?? '',
+      category: ItemCategory.values.firstWhere(
+        (e) => e.name == data['category'],
+        orElse: () => ItemCategory.other,
+      ),
+      description: data['description'],
+      imageUrl: data['imageUrl'] ?? '',
+      latitude: (data['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
+      postedByUserId: data['postedByUserId'] ?? '',
+      postedByName: data['postedByName'] ?? '',
+      postedAt: (data['postedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      status: ItemStatus.values.firstWhere(
+        (e) => e.name == data['status'],
+        orElse: () => ItemStatus.available,
+      ),
+      claimedByUserId: data['claimedByUserId'],
+      isCurbside: data['isCurbside'] ?? false,
+    );
+  }
+
+  /// Creates a TrashItem from a Map (for compatibility)
+  factory TrashItem.fromMap(Map<String, dynamic> map, {String? docId}) {
+    return TrashItem._fromCoordinates(
+      id: docId ?? map['id'] ?? '',
+      name: map['name'] ?? '',
+      category: ItemCategory.values.firstWhere(
+        (e) => e.name == map['category'] || e.toString() == map['category'],
+        orElse: () => ItemCategory.other,
+      ),
+      description: map['description'],
+      imageUrl: map['imageUrl'] ?? '',
+      latitude: (map['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (map['longitude'] as num?)?.toDouble() ?? 0.0,
+      postedByUserId: map['postedByUserId'] ?? '',
+      postedByName: map['postedByName'] ?? map['postedBy'] ?? '',
+      postedAt: map['postedAt'] is Timestamp
+          ? (map['postedAt'] as Timestamp).toDate()
+          : (map['postedAt'] is String
+              ? DateTime.parse(map['postedAt'])
+              : DateTime.now()),
+      status: ItemStatus.values.firstWhere(
+        (e) => e.name == map['status'] || e.toString() == map['status'],
+        orElse: () => ItemStatus.available,
+      ),
+      claimedByUserId: map['claimedByUserId'] ?? map['claimedBy'],
+      isCurbside: map['isCurbside'] ?? false,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -154,10 +187,12 @@ class TrashItem extends HiveObject {
       'imageUrl': imageUrl,
       'latitude': location.latitude,
       'longitude': location.longitude,
-      'postedBy': postedBy,
+      'postedByUserId': postedByUserId,
+      'postedByName': postedByName,
       'postedAt': postedAt.toIso8601String(),
       'status': status.toString(),
-      'claimedBy': claimedBy,
+      'claimedByUserId': claimedByUserId,
+      'isCurbside': isCurbside,
     };
   }
 
@@ -171,12 +206,45 @@ class TrashItem extends HiveObject {
       description: json['description'],
       imageUrl: json['imageUrl'],
       location: LatLng(json['latitude'], json['longitude']),
-      postedBy: json['postedBy'],
+      postedByUserId: json['postedByUserId'] ?? '',
+      postedByName: json['postedByName'] ?? json['postedBy'] ?? '',
       postedAt: DateTime.parse(json['postedAt']),
       status: ItemStatus.values.firstWhere(
         (e) => e.toString() == json['status'],
       ),
-      claimedBy: json['claimedBy'],
+      claimedByUserId: json['claimedByUserId'] ?? json['claimedBy'],
+      isCurbside: json['isCurbside'] ?? false,
+    );
+  }
+
+  /// Creates a copy of the TrashItem with updated fields
+  TrashItem copyWith({
+    String? id,
+    String? name,
+    ItemCategory? category,
+    String? description,
+    String? imageUrl,
+    LatLng? location,
+    String? postedByUserId,
+    String? postedByName,
+    DateTime? postedAt,
+    ItemStatus? status,
+    String? claimedByUserId,
+    bool? isCurbside,
+  }) {
+    return TrashItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      location: location ?? this.location,
+      postedByUserId: postedByUserId ?? this.postedByUserId,
+      postedByName: postedByName ?? this.postedByName,
+      postedAt: postedAt ?? this.postedAt,
+      status: status ?? this.status,
+      claimedByUserId: claimedByUserId ?? this.claimedByUserId,
+      isCurbside: isCurbside ?? this.isCurbside,
     );
   }
 }

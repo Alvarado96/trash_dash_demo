@@ -2,29 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trash_dash_demo/screens/landing_screen.dart';
 import 'package:trash_dash_demo/screens/map_screen.dart';
-import 'package:trash_dash_demo/models/user_model.dart';
-import 'package:trash_dash_demo/models/trash_item.dart';
-import 'package:trash_dash_demo/data/sample_data.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hive
+  // Initialize Firebase first
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Initialize Hive for local settings (theme mode, etc.)
   await Hive.initFlutter();
-
-  // Register Hive adapters
-  Hive.registerAdapter(UserModelAdapter());
-  Hive.registerAdapter(TrashItemAdapter());
-  Hive.registerAdapter(ItemStatusAdapter());
-  Hive.registerAdapter(ItemCategoryAdapter());
-
-  // Open Hive boxes
-  await Hive.openBox<UserModel>('users');
-  await Hive.openBox<TrashItem>('trashItems');
-  await Hive.openBox('currentUser'); // For storing current user ID
-
-  // Initialize sample data
-  await SampleData.initializeSampleData();
+  await Hive.openBox('settings');
 
   runApp(const TrashDashApp());
 }
@@ -46,7 +40,7 @@ class _TrashDashAppState extends State<TrashDashApp> {
   }
 
   void _loadThemeMode() {
-    final settingsBox = Hive.box('currentUser');
+    final settingsBox = Hive.box('settings');
     final isDark = settingsBox.get('isDarkMode', defaultValue: false);
     setState(() {
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
@@ -54,7 +48,7 @@ class _TrashDashAppState extends State<TrashDashApp> {
   }
 
   void toggleTheme(bool isDark) {
-    final settingsBox = Hive.box('currentUser');
+    final settingsBox = Hive.box('settings');
     settingsBox.put('isDarkMode', isDark);
     setState(() {
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
@@ -81,13 +75,22 @@ class _TrashDashAppState extends State<TrashDashApp> {
         useMaterial3: true,
       ),
       themeMode: _themeMode,
-      home: ValueListenableBuilder(
-        valueListenable: Hive.box('currentUser').listenable(),
-        builder: (context, box, widget) {
-          final currentUserId = box.get('userId');
+      home: StreamBuilder<User?>(
+        stream: AuthService().authStateChanges,
+        builder: (context, snapshot) {
+          // Show loading indicator while checking auth state
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(
+                  color: Colors.green,
+                ),
+              ),
+            );
+          }
 
           // If user is signed in, show map screen
-          if (currentUserId != null) {
+          if (snapshot.hasData && snapshot.data != null) {
             return MapScreen(onThemeToggle: toggleTheme);
           }
 
