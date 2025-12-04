@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:trash_dash_demo/models/user_model.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
+import 'package:trash_dash_demo/models/user_model.dart';
 
 class FirestoreService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -152,7 +152,7 @@ class FirestoreService {
   /// Get available trash items
   static Future<List<TrashItem>> getAvailableTrashItems() async {
     final snapshot = await trashItemsCollection
-        .where('status', isEqualTo: 'available')
+        .where('status', isEqualTo: ItemStatus.available.name)
         .get();
     return snapshot.docs.map((doc) => TrashItem.fromFirestore(doc)).toList();
   }
@@ -169,7 +169,7 @@ class FirestoreService {
   static Future<List<TrashItem>> getUserClaimedItems(String userId) async {
     final snapshot = await trashItemsCollection
         .where('claimedByUserId', isEqualTo: userId)
-        .where('status', isEqualTo: 'claimed')
+        .where('status', isEqualTo: ItemStatus.claimed.name)
         .get();
     return snapshot.docs.map((doc) => TrashItem.fromFirestore(doc)).toList();
   }
@@ -177,7 +177,7 @@ class FirestoreService {
   /// Claim a trash item
   static Future<void> claimTrashItem(String itemId, String userId) async {
     await trashItemsCollection.doc(itemId).update({
-      'status': 'claimed',
+      'status': ItemStatus.claimed.name,
       'claimedByUserId': userId,
     });
   }
@@ -185,7 +185,7 @@ class FirestoreService {
   /// Unclaim a trash item
   static Future<void> unclaimTrashItem(String itemId) async {
     await trashItemsCollection.doc(itemId).update({
-      'status': 'available',
+      'status': ItemStatus.available.name,
       'claimedByUserId': null,
     });
   }
@@ -193,7 +193,7 @@ class FirestoreService {
   /// Mark item as picked up
   static Future<void> markItemPickedUp(String itemId) async {
     await trashItemsCollection.doc(itemId).update({
-      'status': 'pickedUp',
+      'status': ItemStatus.pickedUp.name,
     });
   }
 }
