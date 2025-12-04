@@ -53,29 +53,23 @@ class ChatService {
     return conversation;
   }
 
-  /// Get all conversations for a user - simplified query without orderBy
+  /// Get all conversations for a user - USES COMPOSITE INDEX
+  /// Requires index: chats (participantIds Arrays, lastMessageTimestamp Descending)
   static Stream<List<ChatConversation>> getUserConversations(String userId) {
     return _firestore
         .collection('chats')
         .where('participantIds', arrayContains: userId)
+        .orderBy('lastMessageTimestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-      final conversations = snapshot.docs
+      return snapshot.docs
           .map((doc) => ChatConversation.fromFirestore(doc))
           .toList();
-
-      // Sort in memory instead of using orderBy (avoids composite index)
-      conversations.sort((a, b) {
-        final aTime = a.lastMessageTimestamp ?? a.createdAt;
-        final bTime = b.lastMessageTimestamp ?? b.createdAt;
-        return bTime.compareTo(aTime); // Descending
-      });
-
-      return conversations;
     });
   }
 
-  /// Get messages for a conversation
+  /// Get messages for a conversation - USES SINGLE FIELD INDEX
+  /// Requires index: messages subcollection (sentAt Ascending)
   static Stream<List<ChatMessage>> getMessages(String conversationId) {
     return _firestore
         .collection('chats')
@@ -137,7 +131,7 @@ class ChatService {
       'unreadStatus.$userId': false,
     });
 
-    // Mark messages as read - simplified without composite index
+    // Mark messages as read
     final messagesQuery = await _firestore
         .collection('chats')
         .doc(conversationId)
@@ -154,14 +148,14 @@ class ChatService {
     await batch.commit();
   }
 
-  /// Get unread conversation count for a user - simplified
+  /// Get unread conversation count for a user
+  /// Uses client-side filtering to avoid complex composite index
   static Stream<int> getUnreadConversationCount(String userId) {
     return _firestore
         .collection('chats')
         .where('participantIds', arrayContains: userId)
         .snapshots()
         .map((snapshot) {
-      // Filter in memory instead of using composite query
       return snapshot.docs.where((doc) {
         final data = doc.data();
         final unreadStatus =
