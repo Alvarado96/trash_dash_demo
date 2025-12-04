@@ -10,8 +10,10 @@ import 'package:trash_dash_demo/screens/interested_items_screen.dart';
 import 'package:trash_dash_demo/screens/saved_items_screen.dart';
 import 'package:trash_dash_demo/screens/profile_screen.dart';
 import 'package:trash_dash_demo/screens/post_trash_screen.dart';
-import 'package:trash_dash_demo/screens/conversation_list_screen.dart';
 import 'package:trash_dash_demo/screens/chat_screen.dart';
+import 'package:trash_dash_demo/screens/conversations_screen.dart';
+import 'package:trash_dash_demo/models/chat_models.dart';
+import 'package:trash_dash_demo/services/chat_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends StatefulWidget {
@@ -294,341 +296,531 @@ class _MapScreenState extends State<MapScreen> {
     final isUserPosted = item.postedByUserId == currentUserId;
 
     showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: SingleChildScrollView(
-              controller: scrollController,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: _buildItemImage(item.imageUrl),
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) => Scaffold(
+                backgroundColor: Colors.transparent,
+                body: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(16)),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.name,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: _buildItemImage(item.imageUrl),
                         ),
-                      ),
-                      // Bookmark button
-                      StatefulBuilder(
-                        builder: (context, setStateBookmark) {
-                          // Check if user has saved this item
-                          final isSaved =
-                              _currentUser?.savedItemIds.contains(item.id) ??
-                                  false;
-
-                          return IconButton(
-                            onPressed: () async {
-                              if (_currentUser == null) return;
-
-                              try {
-                                if (isSaved) {
-                                  await FirestoreService.removeSavedItem(
-                                      _currentUser!.uid, item.id);
-                                  // Update local state
-                                  _currentUser = _currentUser!.copyWith(
-                                    savedItemIds: List<String>.from(
-                                        _currentUser!.savedItemIds)
-                                      ..remove(item.id),
-                                  );
-                                } else {
-                                  await FirestoreService.addSavedItem(
-                                      _currentUser!.uid, item.id);
-                                  // Update local state
-                                  _currentUser = _currentUser!.copyWith(
-                                    savedItemIds: List<String>.from(
-                                        _currentUser!.savedItemIds)
-                                      ..add(item.id),
-                                  );
-                                }
-
-                                // Show snackbar immediately at bottom of screen
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(isSaved
-                                          ? 'Removed from saved items'
-                                          : 'Saved item!'),
-                                      backgroundColor: Colors.green,
-                                      duration: const Duration(seconds: 3),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                }
-
-                                // Trigger rebuild to show new state
-                                setStateBookmark(() {});
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error: $e'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            icon: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 300),
-                              transitionBuilder: (child, animation) {
-                                return ScaleTransition(
-                                  scale: animation,
-                                  child: child,
-                                );
-                              },
-                              child: Icon(
-                                isSaved
-                                    ? Icons.bookmark
-                                    : Icons.bookmark_border,
-                                key: ValueKey(isSaved),
-                                color: Colors.green.shade700,
-                                size: 28,
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item.name,
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade100,
-                          borderRadius: BorderRadius.circular(16),
+                            // Bookmark button
+                            StatefulBuilder(
+                              builder: (context, setStateBookmark) {
+                                final isSaved = _currentUser?.savedItemIds
+                                        .contains(item.id) ??
+                                    false;
+
+                                return IconButton(
+                                  onPressed: () async {
+                                    if (_currentUser == null) return;
+
+                                    try {
+                                      if (isSaved) {
+                                        await FirestoreService.removeSavedItem(
+                                            _currentUser!.uid, item.id);
+                                        // Update local state
+                                        _currentUser = _currentUser!.copyWith(
+                                          savedItemIds: List<String>.from(
+                                              _currentUser!.savedItemIds)
+                                            ..remove(item.id),
+                                        );
+                                      } else {
+                                        await FirestoreService.addSavedItem(
+                                            _currentUser!.uid, item.id);
+                                        // Update local state
+                                        _currentUser = _currentUser!.copyWith(
+                                          savedItemIds: List<String>.from(
+                                              _currentUser!.savedItemIds)
+                                            ..add(item.id),
+                                        );
+                                      }
+
+                                      // Show snackbar immediately at bottom of screen
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(isSaved
+                                                ? 'Removed from saved items'
+                                                : 'Saved item!'),
+                                            backgroundColor: Colors.green,
+                                            duration:
+                                                const Duration(seconds: 3),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
+
+                                      // Trigger rebuild to show new state
+                                      setStateBookmark(() {});
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text('Error: $e'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  icon: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 300),
+                                    transitionBuilder: (child, animation) {
+                                      return ScaleTransition(
+                                        scale: animation,
+                                        child: child,
+                                      );
+                                    },
+                                    child: Icon(
+                                      isSaved
+                                          ? Icons.bookmark
+                                          : Icons.bookmark_border,
+                                      key: ValueKey(isSaved),
+                                      color: Colors.green.shade700,
+                                      size: 28,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
-                        child: Text(
-                          item.categoryName,
-                          style: TextStyle(
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: item.status == ItemStatus.available
-                              ? Colors.green.shade100
-                              : Colors.orange.shade100,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          item.status == ItemStatus.available
-                              ? 'Available'
-                              : 'Claimed',
-                          style: TextStyle(
-                            color: item.status == ItemStatus.available
-                                ? Colors.green.shade700
-                                : Colors.orange.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (item.isCurbside)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade100,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.local_shipping,
-                                size: 16,
-                                color: Colors.blue.shade700,
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade100,
+                                borderRadius: BorderRadius.circular(16),
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Curbside Pickup',
+                              child: Text(
+                                item.categoryName,
                                 style: TextStyle(
-                                  color: Colors.blue.shade700,
+                                  color: Colors.green.shade700,
                                   fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: item.status == ItemStatus.available
+                                    ? Colors.green.shade100
+                                    : Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                item.status == ItemStatus.available
+                                    ? 'Available'
+                                    : 'Claimed',
+                                style: TextStyle(
+                                  color: item.status == ItemStatus.available
+                                      ? Colors.green.shade700
+                                      : Colors.orange.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (item.isCurbside)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade100,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.local_shipping,
+                                      size: 16,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Curbside Pickup',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade700,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (item.description != null) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            item.description!,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            const Icon(Icons.person,
+                                size: 20, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Posted by ${item.postedByName}',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        // MESSAGE BUTTON - Add this for items NOT posted by current user
+                        if (!isUserPosted) ...[
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                if (_currentUser == null) return;
+
+                                // Get or create conversation
+                                final conversation =
+                                    await ChatService.getOrCreateConversation(
+                                  currentUserId: _currentUser!.uid,
+                                  currentUserName:
+                                      '${_currentUser!.firstName} ${_currentUser!.lastName}',
+                                  otherUserId: item.postedByUserId,
+                                  otherUserName: item.postedByName,
+                                  itemId: item.id,
+                                  itemName: item.name,
+                                );
+
+                                if (mounted) {
+                                  Navigator.pop(context); // Close bottom sheet
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ChatScreen(
+                                          conversation: conversation),
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.message),
+                              label: Text('Message ${item.postedByName}'),
+                              style: OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                side: BorderSide(color: Colors.green.shade700),
+                                foregroundColor: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                        // Only show directions and claim buttons for items NOT posted by current user
+                        if (!isUserPosted) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    Navigator.pop(context);
+                                    await _openGoogleMaps(item);
+                                  },
+                                  icon: const Icon(Icons.directions),
+                                  label: const Text('Get Directions'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16),
+                                    side:
+                                        BorderSide(color: Colors.blue.shade700),
+                                    foregroundColor: Colors.blue.shade700,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                    ],
-                  ),
-                  if (item.description != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      item.description!,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Icon(Icons.person, size: 20, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Posted by ${item.postedByName}',
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                  // Only show directions and claim buttons for items NOT posted by current user
-                  if (!isUserPosted) ...[
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              await _openGoogleMaps(item);
-                            },
-                            icon: const Icon(Icons.directions),
-                            label: const Text('Get Directions'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(color: Colors.blue.shade700),
-                              foregroundColor: Colors.blue.shade700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (item.status == ItemStatus.available)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _currentlyClaimedItem != null
-                              ? null
-                              : () async {
-                                  final currentUserId = _currentUser?.uid ?? '';
+                          const SizedBox(height: 12),
+                          if (item.status == ItemStatus.available)
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _currentlyClaimedItem != null
+                                    ? null
+                                    : () async {
+                                        final currentUserId =
+                                            _currentUser?.uid ?? '';
 
-                                  // Update item status in Firestore
-                                  await FirestoreService.claimTrashItem(
-                                      item.id, currentUserId);
+                                        // Update item status in Firestore
+                                        await FirestoreService.claimTrashItem(
+                                            item.id, currentUserId);
 
-                                  setState(() {
-                                    item.status = ItemStatus.claimed;
-                                    item.claimedByUserId = currentUserId;
-                                    _currentlyClaimedItem = item;
-                                    _createMarkers();
-                                  });
+                                        setState(() {
+                                          item.status = ItemStatus.claimed;
+                                          item.claimedByUserId = currentUserId;
+                                          _currentlyClaimedItem = item;
+                                          _createMarkers();
+                                        });
 
-                                  // Capture the messenger before async gap
-                                  final messenger =
-                                      ScaffoldMessenger.of(context);
-                                  Navigator.pop(context);
+                                        // Capture the messenger before async gap
+                                        final messenger =
+                                            ScaffoldMessenger.of(context);
+                                        Navigator.pop(context);
 
-                                  // Show directions dialog
-                                  final bool? wantsDirections =
-                                      await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('Get Directions?'),
-                                      content: const Text(
-                                        'Would you like to open Google Maps for directions to this item?',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.pop(context, false);
-                                          },
-                                          child: const Text('No'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.pop(context, true);
-                                          },
-                                          child: const Text('Yes'),
-                                        ),
-                                      ],
+                                        // Show directions dialog
+                                        final bool? wantsDirections =
+                                            await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title:
+                                                const Text('Get Directions?'),
+                                            content: const Text(
+                                              'Would you like to open Google Maps for directions to this item?',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.pop(context, false);
+                                                },
+                                                child: const Text('No'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.pop(context, true);
+                                                },
+                                                child: const Text('Yes'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (wantsDirections == true) {
+                                          await _openGoogleMaps(item);
+                                        } else if (wantsDirections == false) {
+                                          // Only show snackbar if user clicked "No"
+                                          messenger.showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                  'Item claimed! Head over to pick it up.'),
+                                              backgroundColor: Colors.green,
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _currentlyClaimedItem != null
+                                      ? Colors.grey
+                                      : Colors.green.shade700,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                child: Text(
+                                  _currentlyClaimedItem != null
+                                      ? "Already on the way to another item"
+                                      : "I'm on my way!",
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            )
+                          else if (item.claimedByUserId == currentUserId)
+                            Column(
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      // Update in Firestore
+                                      await FirestoreService.markItemPickedUp(
+                                          item.id);
+
+                                      setState(() {
+                                        item.status = ItemStatus.pickedUp;
+                                        _currentlyClaimedItem = null;
+                                        _createMarkers();
+                                      });
+
+                                      if (mounted) {
+                                        Navigator.pop(context);
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                                'Item picked up! Enjoy your treasure!'),
+                                            backgroundColor: Colors.green,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue.shade700,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
                                     ),
-                                  );
+                                    child: const Text(
+                                      "Mark as Picked Up",
+                                      style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton(
+                                    onPressed: () async {
+                                      // Update in Firestore
+                                      await FirestoreService.unclaimTrashItem(
+                                          item.id);
 
-                                  if (wantsDirections == true) {
-                                    await _openGoogleMaps(item);
-                                  } else if (wantsDirections == false) {
-                                    // Only show snackbar if user clicked "No"
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Item claimed! Head over to pick it up.'),
-                                        backgroundColor: Colors.green,
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _currentlyClaimedItem != null
-                                ? Colors.grey
-                                : Colors.green.shade700,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: Text(
-                            _currentlyClaimedItem != null
-                                ? "Already on the way to another item"
-                                : "I'm on my way!",
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      )
-                    else if (item.claimedByUserId == currentUserId)
-                      Column(
-                        children: [
+                                      setState(() {
+                                        item.status = ItemStatus.available;
+                                        item.claimedByUserId = null;
+                                        _currentlyClaimedItem = null;
+                                        _createMarkers();
+                                      });
+
+                                      if (mounted) {
+                                        Navigator.pop(context);
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                                'Item unclaimed. It\'s now available for others.'),
+                                            backgroundColor: Colors.orange,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
+                                      side: BorderSide(
+                                          color: Colors.red.shade700),
+                                      foregroundColor: Colors.red.shade700,
+                                    ),
+                                    child: const Text(
+                                      "Cancel - I'm not going anymore",
+                                      style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else if (item.claimedByUserId != null)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Someone is on the way for this item',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                        ],
+                        // Show "Mark as Picked Up" button for poster anytime (claimed or available)
+                        if (isUserPosted &&
+                            (item.status == ItemStatus.available ||
+                                item.status == ItemStatus.claimed)) ...[
+                          const SizedBox(height: 16),
+                          // Show who claimed it if applicable
+                          if (item.status == ItemStatus.claimed &&
+                              item.claimedByUserId != null)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    Border.all(color: Colors.orange.shade200),
+                              ),
+                              child: const Text(
+                                'Someone claimed this item',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          if (item.status == ItemStatus.claimed &&
+                              item.claimedByUserId != null)
+                            const SizedBox(height: 12),
+                          // Always show "Mark as Picked Up" button for poster
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton(
+                            child: ElevatedButton.icon(
                               onPressed: () async {
+                                // Capture messenger before async gap
+                                final messenger = ScaffoldMessenger.of(context);
+
                                 // Update in Firestore
                                 await FirestoreService.markItemPickedUp(
                                     item.id);
 
                                 setState(() {
                                   item.status = ItemStatus.pickedUp;
-                                  _currentlyClaimedItem = null;
                                   _createMarkers();
                                 });
 
                                 if (mounted) {
                                   Navigator.pop(context);
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  messenger.showSnackBar(
                                     const SnackBar(
-                                      content: Text(
-                                          'Item picked up! Enjoy your treasure!'),
+                                      content:
+                                          Text('Item marked as picked up!'),
                                       backgroundColor: Colors.green,
                                     ),
                                   );
@@ -640,152 +832,22 @@ class _MapScreenState extends State<MapScreen> {
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 16),
                               ),
-                              child: const Text(
+                              icon: const Icon(Icons.check_circle),
+                              label: const Text(
                                 "Mark as Picked Up",
                                 style: TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: () async {
-                                // Update in Firestore
-                                await FirestoreService.unclaimTrashItem(
-                                    item.id);
-
-                                setState(() {
-                                  item.status = ItemStatus.available;
-                                  item.claimedByUserId = null;
-                                  _currentlyClaimedItem = null;
-                                  _createMarkers();
-                                });
-
-                                if (mounted) {
-                                  Navigator.pop(context);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                          'Item unclaimed. It\'s now available for others.'),
-                                      backgroundColor: Colors.orange,
-                                    ),
-                                  );
-                                }
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                                side: BorderSide(color: Colors.red.shade700),
-                                foregroundColor: Colors.red.shade700,
-                              ),
-                              child: const Text(
-                                "Cancel - I'm not going anymore",
-                                style: TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
+                          const SizedBox(height: 16),
                         ],
-                      )
-                    else if (item.claimedByUserId != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Someone is on the way for this item',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                  ],
-                  // Show "Mark as Picked Up" button for poster anytime (claimed or available)
-                  if (isUserPosted &&
-                      (item.status == ItemStatus.available ||
-                          item.status == ItemStatus.claimed)) ...[
-                    const SizedBox(height: 16),
-                    // Show who claimed it if applicable
-                    if (item.status == ItemStatus.claimed &&
-                        item.claimedByUserId != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 12, horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.shade200),
-                        ),
-                        child: const Text(
-                          'Someone claimed this item',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    if (item.status == ItemStatus.claimed &&
-                        item.claimedByUserId != null)
-                      const SizedBox(height: 12),
-                    // Always show "Mark as Picked Up" button for poster
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          // Capture messenger before async gap
-                          final messenger = ScaffoldMessenger.of(context);
-
-                          // Update in Firestore
-                          await FirestoreService.markItemPickedUp(item.id);
-
-                          setState(() {
-                            item.status = ItemStatus.pickedUp;
-                            _createMarkers();
-                          });
-
-                          if (mounted) {
-                            Navigator.pop(context);
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('Item marked as picked up!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade700,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        icon: const Icon(Icons.check_circle),
-                        label: const Text(
-                          "Mark as Picked Up",
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                  ],
-                ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-      ),
-    );
+            ));
   }
 
   Future<void> _getCurrentLocation() async {
@@ -938,6 +1000,46 @@ class _MapScreenState extends State<MapScreen> {
               );
             },
           ),
+          // Messages option - NEW
+          ListTile(
+            leading: const Icon(Icons.message),
+            title: const Text('Messages'),
+            trailing: _currentUser != null
+                ? StreamBuilder<int>(
+                    stream: ChatService.getUnreadConversationCount(
+                        _currentUser!.uid),
+                    builder: (context, snapshot) {
+                      final count = snapshot.data ?? 0;
+                      if (count == 0) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : null,
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ConversationsScreen(),
+                ),
+              );
+            },
+          ),
           // My Items option
           ListTile(
             leading: const Icon(Icons.favorite),
@@ -962,20 +1064,6 @@ class _MapScreenState extends State<MapScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const SavedItemsScreen(),
-                ),
-              );
-            },
-          ),
-          // Messages option
-          ListTile(
-            leading: const Icon(Icons.message),
-            title: const Text('Messages'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ConversationListScreen(),
                 ),
               );
             },

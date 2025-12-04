@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:trash_dash_demo/models/message.dart';
-import 'package:trash_dash_demo/models/conversation.dart';
+import 'package:trash_dash_demo/models/chat_models.dart';
 import 'package:trash_dash_demo/services/chat_service.dart';
-import 'package:trash_dash_demo/services/local_storage_service.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
 
 class ChatScreen extends StatefulWidget {
-  final Conversation conversation;
+  final ChatConversation conversation;
 
   const ChatScreen({super.key, required this.conversation});
 
@@ -16,7 +15,6 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<Message> _messages = [];
   String? _currentUserId;
   String? _currentUserName;
 
@@ -24,40 +22,36 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _loadUserData();
-    _loadMessages();
+    _markAsRead();
   }
 
-  void _loadUserData() {
-    final currentUser = LocalStorageService.getCurrentUser();
+  Future<void> _loadUserData() async {
+    final currentUser = AuthService().currentUser;
     if (currentUser != null) {
       _currentUserId = currentUser.uid;
-      _currentUserName = '${currentUser.firstName} ${currentUser.lastName}';
+      _currentUserName = currentUser.displayName ?? 'User';
+      setState(() {});
     }
   }
 
-  void _loadMessages() {
-    setState(() {
-      _messages = ChatService.getMessages(widget.conversation.id);
-    });
-
-    // Mark messages as read
+  Future<void> _markAsRead() async {
     if (_currentUserId != null) {
-      ChatService.markConversationAsRead(widget.conversation.id, _currentUserId!);
+      await ChatService.markConversationAsRead(
+        widget.conversation.id,
+        _currentUserId!,
+      );
     }
-
-    // Scroll to bottom after loading
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
   }
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
     }
   }
 
@@ -67,6 +61,9 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
+    final recipientId =
+        widget.conversation.getOtherParticipantId(_currentUserId!);
+
     _messageController.clear();
 
     await ChatService.sendMessage(
@@ -74,9 +71,8 @@ class _ChatScreenState extends State<ChatScreen> {
       senderId: _currentUserId!,
       senderName: _currentUserName!,
       content: content,
+      recipientId: recipientId,
     );
-
-    _loadMessages();
   }
 
   @override
@@ -103,42 +99,54 @@ class _ChatScreenState extends State<ChatScreen> {
               otherParticipantName,
               style: const TextStyle(fontSize: 18),
             ),
-            Text(
-              'Re: ${widget.conversation.itemName}',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
+            if (widget.conversation.itemName != null)
+              Text(
+                'Re: ${widget.conversation.itemName}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
-            ),
           ],
         ),
       ),
       body: Column(
         children: [
           // Item info banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.green.shade50,
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.green.shade700, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Discussing: ${widget.conversation.itemName}',
-                    style: TextStyle(
-                      color: Colors.green.shade700,
-                      fontSize: 14,
+          if (widget.conversation.itemName != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Colors.green.shade50,
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      color: Colors.green.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Discussing: ${widget.conversation.itemName}',
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           // Messages list
           Expanded(
-            child: _messages.isEmpty
-                ? Center(
+            child: StreamBuilder<List<ChatMessage>>(
+              stream: ChatService.getMessages(widget.conversation.id),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final messages = snapshot.data ?? [];
+
+                if (messages.isEmpty) {
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -165,18 +173,27 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ],
                     ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      final isMe = message.senderId == _currentUserId;
+                  );
+                }
 
-                      return _buildMessageBubble(message, isMe);
-                    },
-                  ),
+                // Scroll to bottom when new messages arrive
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _scrollToBottom();
+                });
+
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final isMe = message.senderId == _currentUserId;
+
+                    return _buildMessageBubble(message, isMe);
+                  },
+                );
+              },
+            ),
           ),
           // Message input
           Container(
@@ -233,7 +250,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(Message message, bool isMe) {
+  Widget _buildMessageBubble(ChatMessage message, bool isMe) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -288,9 +305,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String _formatHourMinute(DateTime dateTime) {
     int hour = dateTime.hour;
     final period = hour >= 12 ? 'PM' : 'AM';
-    // Convert 24-hour to 12-hour format
     if (hour == 0) {
-      hour = 12; // Midnight is 12 AM
+      hour = 12;
     } else if (hour > 12) {
       hour = hour - 12;
     }

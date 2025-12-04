@@ -1,167 +1,191 @@
-import 'package:hive/hive.dart';
-import 'package:uuid/uuid.dart';
-import 'package:trash_dash_demo/models/message.dart';
-import 'package:trash_dash_demo/models/conversation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:trash_dash_demo/models/chat_models.dart';
 
 class ChatService {
-  static const _uuid = Uuid();
-
-  // Boxes
-  static Box<Message> get messagesBox => Hive.box<Message>('messages');
-  static Box<Conversation> get conversationsBox =>
-      Hive.box<Conversation>('conversations');
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// Get or create a conversation between two users about an item
-  static Future<Conversation> getOrCreateConversation({
-    required String itemId,
-    required String itemName,
+  static Future<ChatConversation> getOrCreateConversation({
     required String currentUserId,
     required String currentUserName,
     required String otherUserId,
     required String otherUserName,
+    String? itemId,
+    String? itemName,
   }) async {
-    // Check if conversation already exists
-    final existingConversation = conversationsBox.values.where((conv) {
-      return conv.itemId == itemId &&
-          conv.participantIds.contains(currentUserId) &&
-          conv.participantIds.contains(otherUserId);
-    }).toList();
+    // Check if conversation already exists between these users for this item
+    final existingQuery = await _firestore
+        .collection('chats')
+        .where('participantIds', arrayContains: currentUserId)
+        .get();
 
-    if (existingConversation.isNotEmpty) {
-      return existingConversation.first;
+    for (var doc in existingQuery.docs) {
+      final data = doc.data();
+      final participants = List<String>.from(data['participantIds'] ?? []);
+      final docItemId = data['itemId'];
+
+      // Check if this conversation is between the same users and for the same item
+      if (participants.contains(otherUserId) &&
+          (itemId == null || docItemId == itemId)) {
+        return ChatConversation.fromFirestore(doc);
+      }
     }
 
     // Create new conversation
-    final conversation = Conversation(
-      id: _uuid.v4(),
+    final conversationRef = _firestore.collection('chats').doc();
+    final conversation = ChatConversation(
+      id: conversationRef.id,
+      participantIds: [currentUserId, otherUserId],
+      participantNames: {
+        currentUserId: currentUserName,
+        otherUserId: otherUserName,
+      },
       itemId: itemId,
       itemName: itemName,
-      participantIds: [currentUserId, otherUserId],
-      participantNames: [currentUserName, otherUserName],
+      unreadStatus: {
+        currentUserId: false,
+        otherUserId: false,
+      },
       createdAt: DateTime.now(),
-      lastMessageAt: DateTime.now(),
     );
 
-    await conversationsBox.put(conversation.id, conversation);
+    await conversationRef.set(conversation.toFirestore());
     return conversation;
   }
 
-  /// Send a message in a conversation
-  static Future<Message> sendMessage({
+  /// Get all conversations for a user - simplified query without orderBy
+  static Stream<List<ChatConversation>> getUserConversations(String userId) {
+    return _firestore
+        .collection('chats')
+        .where('participantIds', arrayContains: userId)
+        .snapshots()
+        .map((snapshot) {
+      final conversations = snapshot.docs
+          .map((doc) => ChatConversation.fromFirestore(doc))
+          .toList();
+
+      // Sort in memory instead of using orderBy (avoids composite index)
+      conversations.sort((a, b) {
+        final aTime = a.lastMessageTimestamp ?? a.createdAt;
+        final bTime = b.lastMessageTimestamp ?? b.createdAt;
+        return bTime.compareTo(aTime); // Descending
+      });
+
+      return conversations;
+    });
+  }
+
+  /// Get messages for a conversation
+  static Stream<List<ChatMessage>> getMessages(String conversationId) {
+    return _firestore
+        .collection('chats')
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('sentAt', descending: false)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => ChatMessage.fromFirestore(doc))
+          .toList();
+    });
+  }
+
+  /// Send a message
+  static Future<void> sendMessage({
     required String conversationId,
     required String senderId,
     required String senderName,
     required String content,
+    required String recipientId,
   }) async {
-    final message = Message(
-      id: _uuid.v4(),
-      conversationId: conversationId,
+    final messageRef = _firestore
+        .collection('chats')
+        .doc(conversationId)
+        .collection('messages')
+        .doc();
+
+    final message = ChatMessage(
+      id: messageRef.id,
       senderId: senderId,
       senderName: senderName,
       content: content,
       sentAt: DateTime.now(),
+      isRead: false,
     );
 
-    await messagesBox.put(message.id, message);
+    final batch = _firestore.batch();
 
-    // Update conversation's last message
-    final conversation = conversationsBox.get(conversationId);
-    if (conversation != null) {
-      conversation.lastMessageAt = message.sentAt;
-      conversation.lastMessageContent = content;
-      conversation.lastMessageSenderId = senderId;
-      await conversationsBox.put(conversationId, conversation);
-    }
+    batch.set(messageRef, message.toFirestore());
 
-    return message;
+    final conversationRef = _firestore.collection('chats').doc(conversationId);
+    batch.update(conversationRef, {
+      'lastMessage': content,
+      'lastMessageTimestamp': Timestamp.fromDate(DateTime.now()),
+      'lastMessageSenderId': senderId,
+      'unreadStatus.$recipientId': true,
+    });
+
+    await batch.commit();
   }
 
-  /// Get all messages in a conversation
-  static List<Message> getMessages(String conversationId) {
-    return messagesBox.values
-        .where((msg) => msg.conversationId == conversationId)
-        .toList()
-      ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
-  }
-
-  /// Get all conversations for a user
-  static List<Conversation> getUserConversations(String userId) {
-    return conversationsBox.values
-        .where((conv) => conv.participantIds.contains(userId))
-        .toList()
-      ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
-  }
-
-  /// Mark all messages in a conversation as read for a user
+  /// Mark conversation as read for a user
   static Future<void> markConversationAsRead(
-      String conversationId, String userId) async {
-    final messages = messagesBox.values
-        .where((msg) =>
-            msg.conversationId == conversationId && msg.senderId != userId)
-        .toList();
+    String conversationId,
+    String userId,
+  ) async {
+    await _firestore.collection('chats').doc(conversationId).update({
+      'unreadStatus.$userId': false,
+    });
 
-    for (var message in messages) {
-      if (!message.isRead) {
-        message.isRead = true;
-        await messagesBox.put(message.id, message);
+    // Mark messages as read - simplified without composite index
+    final messagesQuery = await _firestore
+        .collection('chats')
+        .doc(conversationId)
+        .collection('messages')
+        .get();
+
+    final batch = _firestore.batch();
+    for (var doc in messagesQuery.docs) {
+      final message = doc.data();
+      if (message['senderId'] != userId && message['isRead'] == false) {
+        batch.update(doc.reference, {'isRead': true});
       }
     }
+    await batch.commit();
   }
 
-  /// Get unread message count for a user
-  static int getUnreadMessageCount(String userId) {
-    // Get user's conversation IDs first
-    final userConversationIds = getUserConversations(userId)
-        .map((conv) => conv.id)
-        .toSet();
-
-    // Single pass through messages, filtering by user's conversations
-    return messagesBox.values
-        .where((msg) =>
-            userConversationIds.contains(msg.conversationId) &&
-            msg.senderId != userId &&
-            !msg.isRead)
-        .length;
+  /// Get unread conversation count for a user - simplified
+  static Stream<int> getUnreadConversationCount(String userId) {
+    return _firestore
+        .collection('chats')
+        .where('participantIds', arrayContains: userId)
+        .snapshots()
+        .map((snapshot) {
+      // Filter in memory instead of using composite query
+      return snapshot.docs.where((doc) {
+        final data = doc.data();
+        final unreadStatus =
+            Map<String, dynamic>.from(data['unreadStatus'] ?? {});
+        return unreadStatus[userId] == true;
+      }).length;
+    });
   }
 
-  /// Get unread message count for a specific conversation
-  static int getUnreadCountForConversation(
-      String conversationId, String userId) {
-    return messagesBox.values
-        .where((msg) =>
-            msg.conversationId == conversationId &&
-            msg.senderId != userId &&
-            !msg.isRead)
-        .length;
-  }
-
-  /// Delete a conversation and its messages
+  /// Delete a conversation
   static Future<void> deleteConversation(String conversationId) async {
-    // Delete all messages in the conversation
-    final messagesToDelete = messagesBox.values
-        .where((msg) => msg.conversationId == conversationId)
-        .toList();
+    final messagesQuery = await _firestore
+        .collection('chats')
+        .doc(conversationId)
+        .collection('messages')
+        .get();
 
-    for (var message in messagesToDelete) {
-      await messagesBox.delete(message.id);
+    final batch = _firestore.batch();
+    for (var doc in messagesQuery.docs) {
+      batch.delete(doc.reference);
     }
 
-    // Delete the conversation
-    await conversationsBox.delete(conversationId);
-  }
+    batch.delete(_firestore.collection('chats').doc(conversationId));
 
-  /// Find a conversation by item ID and participants
-  static Conversation? findConversation({
-    required String itemId,
-    required String userId1,
-    required String userId2,
-  }) {
-    final matches = conversationsBox.values.where((conv) {
-      return conv.itemId == itemId &&
-          conv.participantIds.contains(userId1) &&
-          conv.participantIds.contains(userId2);
-    }).toList();
-
-    return matches.isNotEmpty ? matches.first : null;
+    await batch.commit();
   }
 }
