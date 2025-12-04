@@ -91,7 +91,7 @@ class FirestoreService {
     await _firestore.runTransaction((transaction) async {
       // Add the trash item
       transaction.set(trashItemsCollection.doc(item.id), item.toFirestore());
-      
+
       // Also add to user's posted items if userId is provided
       if (item.postedByUserId.isNotEmpty) {
         transaction.update(usersCollection.doc(item.postedByUserId), {
@@ -120,9 +120,9 @@ class FirestoreService {
     // Get the item first to find the user ID
     final doc = await trashItemsCollection.doc(id).get();
     if (!doc.exists) return;
-    
+
     final item = TrashItem.fromFirestore(doc);
-    
+
     await _firestore.runTransaction((transaction) async {
       // Remove from user's posted items if userId is available
       if (item.postedByUserId.isNotEmpty) {
@@ -130,7 +130,7 @@ class FirestoreService {
           'postedItemIds': FieldValue.arrayRemove([id]),
         });
       }
-      
+
       // Delete the trash item
       transaction.delete(trashItemsCollection.doc(id));
     });

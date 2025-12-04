@@ -68,10 +68,10 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadUserAndTrashItems() async {
     // Load user data from Firestore
     _currentUser = await AuthService().getCurrentUserData();
-    
+
     // Load trash items from Firestore
     _trashItems = await FirestoreService.getAllTrashItems();
-    
+
     if (mounted) {
       setState(() {
         _createMarkers();
@@ -143,7 +143,8 @@ class _MapScreenState extends State<MapScreen> {
   void _handleMarkerTap(TrashItem item) {
     final currentUserId = _currentUser?.uid ?? '';
     // If the item is claimed by someone else, show confirmation dialog
-    if (item.status == ItemStatus.claimed && item.claimedByUserId != currentUserId) {
+    if (item.status == ItemStatus.claimed &&
+        item.claimedByUserId != currentUserId) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -530,10 +531,11 @@ class _MapScreenState extends State<MapScreen> {
                               ? null
                               : () async {
                                   final currentUserId = _currentUser?.uid ?? '';
-                                  
+
                                   // Update item status in Firestore
-                                  await FirestoreService.claimTrashItem(item.id, currentUserId);
-                                  
+                                  await FirestoreService.claimTrashItem(
+                                      item.id, currentUserId);
+
                                   setState(() {
                                     item.status = ItemStatus.claimed;
                                     item.claimedByUserId = currentUserId;
@@ -610,8 +612,9 @@ class _MapScreenState extends State<MapScreen> {
                             child: ElevatedButton(
                               onPressed: () async {
                                 // Update in Firestore
-                                await FirestoreService.markItemPickedUp(item.id);
-                                
+                                await FirestoreService.markItemPickedUp(
+                                    item.id);
+
                                 setState(() {
                                   item.status = ItemStatus.pickedUp;
                                   _currentlyClaimedItem = null;
@@ -648,8 +651,9 @@ class _MapScreenState extends State<MapScreen> {
                             child: OutlinedButton(
                               onPressed: () async {
                                 // Update in Firestore
-                                await FirestoreService.unclaimTrashItem(item.id);
-                                
+                                await FirestoreService.unclaimTrashItem(
+                                    item.id);
+
                                 setState(() {
                                   item.status = ItemStatus.available;
                                   item.claimedByUserId = null;
@@ -1051,7 +1055,7 @@ class _MapScreenState extends State<MapScreen> {
 
           // If item was posted successfully, reload trash items
           if (result == true) {
-            _loadTrashItems();
+            _loadUserAndTrashItems();
           }
         },
         backgroundColor: Colors.green.shade700,
