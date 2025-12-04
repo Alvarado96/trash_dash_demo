@@ -255,8 +255,14 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     final difference = now.difference(dateTime);
 
     if (difference.inDays == 0) {
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour;
-      final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+      int hour = dateTime.hour;
+      final period = hour >= 12 ? 'PM' : 'AM';
+      // Convert 24-hour to 12-hour format
+      if (hour == 0) {
+        hour = 12; // Midnight is 12 AM
+      } else if (hour > 12) {
+        hour = hour - 12;
+      }
       final minute = dateTime.minute.toString().padLeft(2, '0');
       return '$hour:$minute $period';
     } else if (difference.inDays == 1) {

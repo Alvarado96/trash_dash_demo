@@ -110,19 +110,18 @@ class ChatService {
 
   /// Get unread message count for a user
   static int getUnreadMessageCount(String userId) {
-    final userConversations = getUserConversations(userId);
-    int count = 0;
+    // Get user's conversation IDs first
+    final userConversationIds = getUserConversations(userId)
+        .map((conv) => conv.id)
+        .toSet();
 
-    for (var conv in userConversations) {
-      count += messagesBox.values
-          .where((msg) =>
-              msg.conversationId == conv.id &&
-              msg.senderId != userId &&
-              !msg.isRead)
-          .length;
-    }
-
-    return count;
+    // Single pass through messages, filtering by user's conversations
+    return messagesBox.values
+        .where((msg) =>
+            userConversationIds.contains(msg.conversationId) &&
+            msg.senderId != userId &&
+            !msg.isRead)
+        .length;
   }
 
   /// Get unread message count for a specific conversation
