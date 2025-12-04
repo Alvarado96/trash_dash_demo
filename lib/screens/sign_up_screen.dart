@@ -63,13 +63,35 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _isLoading = true;
     });
     try {
-      final user = await authService.value.createAccount(
-          email: _emailController.text, password: _passwordController.text);
+      final user = await AuthService().createAccount(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        interestedCategories: _selectedCategories.toList(),
+      );
+
       if (user != null && mounted) {
         Navigator.pushReplacementNamed(context, '/map');
       }
     } on FirebaseAuthException catch (e) {
-      print(e.message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign up failed: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign up failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {

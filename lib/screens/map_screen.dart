@@ -4,10 +4,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
 import 'package:trash_dash_demo/models/user_model.dart';
-import 'package:trash_dash_demo/models/conversation.dart';
-import 'package:trash_dash_demo/services/local_storage_service.dart';
-import 'package:trash_dash_demo/services/hive_auth_service.dart';
-import 'package:trash_dash_demo/services/chat_service.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
+import 'package:trash_dash_demo/services/firestore_service.dart';
 import 'package:trash_dash_demo/screens/interested_items_screen.dart';
 import 'package:trash_dash_demo/screens/saved_items_screen.dart';
 import 'package:trash_dash_demo/screens/profile_screen.dart';
@@ -36,11 +34,12 @@ class _MapScreenState extends State<MapScreen> {
   TrashItem? _currentlyClaimedItem;
   double _currentZoom = 13.0;
   bool _infoWindowsVisible = false;
+  UserModel? _currentUser;
 
   @override
   void initState() {
     super.initState();
-    _loadTrashItems();
+    _loadUserAndTrashItems();
     _getCurrentLocation();
 
     // If a selected item was passed, show its details after a short delay
@@ -68,20 +67,24 @@ class _MapScreenState extends State<MapScreen> {
     _showItemDetails(item);
   }
 
-  void _loadTrashItems() {
-    setState(() {
-      _trashItems = LocalStorageService.getAllTrashItems();
-      _createMarkers();
-    });
+  Future<void> _loadUserAndTrashItems() async {
+    // Load user data from Firestore
+    _currentUser = await AuthService().getCurrentUserData();
+
+    // Load trash items from Firestore
+    _trashItems = await FirestoreService.getAllTrashItems();
+
+    if (mounted) {
+      setState(() {
+        _createMarkers();
+      });
+    }
   }
 
   void _createMarkers() {
-    final currentUser = LocalStorageService.getCurrentUser();
-    final userInterests = currentUser?.interestedCategories ?? [];
-    final userSavedIds = currentUser?.savedItemIds ?? [];
-    final currentUserName = currentUser != null
-        ? '${currentUser.firstName} ${currentUser.lastName}'
-        : '';
+    final userInterests = _currentUser?.interestedCategories ?? [];
+    final userSavedIds = _currentUser?.savedItemIds ?? [];
+    final currentUserId = _currentUser?.uid ?? '';
 
     _markers = _trashItems
         .where((item) => item.status != ItemStatus.pickedUp)
@@ -90,10 +93,10 @@ class _MapScreenState extends State<MapScreen> {
           item.status == ItemStatus.available ? 'Available' : 'Claimed';
 
       // Check if this item was posted by current user
-      final bool isUserPosted = item.postedBy == currentUserName;
+      final bool isUserPosted = item.postedByUserId == currentUserId;
 
       // Check if user is on the way for this item
-      final bool isUserOnTheWay = item.claimedBy == 'You';
+      final bool isUserOnTheWay = item.claimedByUserId == currentUserId;
 
       // Check if user has saved this item
       final bool isSaved = userSavedIds.contains(item.id);
@@ -140,13 +143,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _handleMarkerTap(TrashItem item) {
+    final currentUserId = _currentUser?.uid ?? '';
     // If the item is claimed by someone else, show confirmation dialog
-    if (item.status == ItemStatus.claimed && item.claimedBy != 'You') {
+    if (item.status == ItemStatus.claimed &&
+        item.claimedByUserId != currentUserId) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Item Already Claimed'),
-          content: Text(
+          content: const Text(
             'Someone else is already on the way for this item. Are you sure you want to look at it?',
           ),
           actions: [
@@ -285,11 +290,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showItemDetails(TrashItem item) {
-    final currentUser = LocalStorageService.getCurrentUser();
-    final currentUserName = currentUser != null
-        ? '${currentUser.firstName} ${currentUser.lastName}'
-        : '';
-    final isUserPosted = item.postedBy == currentUserName;
+    final currentUserId = _currentUser?.uid ?? '';
+    final isUserPosted = item.postedByUserId == currentUserId;
 
     showModalBottomSheet(
       context: context,
@@ -333,56 +335,62 @@ class _MapScreenState extends State<MapScreen> {
                       // Bookmark button
                       StatefulBuilder(
                         builder: (context, setStateBookmark) {
-                          // Get fresh user data on each rebuild
-                          final freshUser =
-                              LocalStorageService.getCurrentUser();
+                          // Check if user has saved this item
                           final isSaved =
-                              freshUser?.savedItemIds.contains(item.id) ??
+                              _currentUser?.savedItemIds.contains(item.id) ??
                                   false;
 
                           return IconButton(
                             onPressed: () async {
-                              if (freshUser == null) return;
+                              if (_currentUser == null) return;
 
-                              final updatedSavedIds =
-                                  List<String>.from(freshUser.savedItemIds);
-                              if (isSaved) {
-                                updatedSavedIds.remove(item.id);
-                              } else {
-                                updatedSavedIds.add(item.id);
+                              try {
+                                if (isSaved) {
+                                  await FirestoreService.removeSavedItem(
+                                      _currentUser!.uid, item.id);
+                                  // Update local state
+                                  _currentUser = _currentUser!.copyWith(
+                                    savedItemIds: List<String>.from(
+                                        _currentUser!.savedItemIds)
+                                      ..remove(item.id),
+                                  );
+                                } else {
+                                  await FirestoreService.addSavedItem(
+                                      _currentUser!.uid, item.id);
+                                  // Update local state
+                                  _currentUser = _currentUser!.copyWith(
+                                    savedItemIds: List<String>.from(
+                                        _currentUser!.savedItemIds)
+                                      ..add(item.id),
+                                  );
+                                }
+
+                                // Show snackbar immediately at bottom of screen
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(isSaved
+                                          ? 'Removed from saved items'
+                                          : 'Saved item!'),
+                                      backgroundColor: Colors.green,
+                                      duration: const Duration(seconds: 3),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+
+                                // Trigger rebuild to show new state
+                                setStateBookmark(() {});
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
                               }
-
-                              // Show snackbar immediately at bottom of screen
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(isSaved
-                                        ? 'Removed from saved items'
-                                        : 'Saved item!'),
-                                    backgroundColor: Colors.green,
-                                    duration: const Duration(seconds: 3),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-
-                              final updatedUser = UserModel(
-                                uid: freshUser.uid,
-                                email: freshUser.email,
-                                firstName: freshUser.firstName,
-                                lastName: freshUser.lastName,
-                                photoUrl: freshUser.photoUrl,
-                                createdAt: freshUser.createdAt,
-                                passwordHash: freshUser.passwordHash,
-                                interestedCategories:
-                                    freshUser.interestedCategories,
-                                savedItemIds: updatedSavedIds,
-                              );
-
-                              await LocalStorageService.saveUser(updatedUser);
-
-                              // Trigger rebuild to show new state
-                              setStateBookmark(() {});
                             },
                             icon: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 300),
@@ -489,7 +497,7 @@ class _MapScreenState extends State<MapScreen> {
                       const Icon(Icons.person, size: 20, color: Colors.grey),
                       const SizedBox(width: 8),
                       Text(
-                        'Posted by ${item.postedBy}',
+                        'Posted by ${item.postedByName}',
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -516,68 +524,6 @@ class _MapScreenState extends State<MapScreen> {
                         ),
                       ],
                     ),
-                    // Show "Message Poster" button for non-curbside items
-                    if (!item.isCurbside) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            // Get current user info
-                            final currentUser = LocalStorageService.getCurrentUser();
-                            if (currentUser == null) return;
-                            
-                            final currentUserName = '${currentUser.firstName} ${currentUser.lastName}';
-                            
-                            // We need to find the poster's user ID
-                            // Since we only have the poster's name, we need to search for their user
-                            final allUsers = LocalStorageService.getAllUsers();
-                            final posterUser = allUsers.where((u) => 
-                              '${u.firstName} ${u.lastName}' == item.postedBy
-                            ).toList();
-                            
-                            if (posterUser.isEmpty) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Unable to find poster\'s account'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-                            
-                            // Get or create conversation
-                            final conversation = await ChatService.getOrCreateConversation(
-                              itemId: item.id,
-                              itemName: item.name,
-                              currentUserId: currentUser.uid,
-                              currentUserName: currentUserName,
-                              otherUserId: posterUser.first.uid,
-                              otherUserName: item.postedBy,
-                            );
-                            
-                            if (mounted) {
-                              Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ChatScreen(conversation: conversation),
-                                ),
-                              );
-                            }
-                          },
-                          icon: const Icon(Icons.message),
-                          label: const Text('Message Poster'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            side: BorderSide(color: Colors.green.shade700),
-                            foregroundColor: Colors.green.shade700,
-                          ),
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 12),
                     if (item.status == ItemStatus.available)
                       SizedBox(
@@ -586,17 +532,16 @@ class _MapScreenState extends State<MapScreen> {
                           onPressed: _currentlyClaimedItem != null
                               ? null
                               : () async {
+                                  final currentUserId = _currentUser?.uid ?? '';
+
+                                  // Update item status in Firestore
+                                  await FirestoreService.claimTrashItem(
+                                      item.id, currentUserId);
+
                                   setState(() {
                                     item.status = ItemStatus.claimed;
-                                    item.claimedBy = 'You';
+                                    item.claimedByUserId = currentUserId;
                                     _currentlyClaimedItem = item;
-                                  });
-
-                                  // Save to Hive
-                                  await LocalStorageService.updateTrashItem(
-                                      item);
-
-                                  setState(() {
                                     _createMarkers();
                                   });
 
@@ -661,22 +606,20 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                         ),
                       )
-                    else if (item.claimedBy == 'You')
+                    else if (item.claimedByUserId == currentUserId)
                       Column(
                         children: [
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () async {
+                                // Update in Firestore
+                                await FirestoreService.markItemPickedUp(
+                                    item.id);
+
                                 setState(() {
                                   item.status = ItemStatus.pickedUp;
                                   _currentlyClaimedItem = null;
-                                });
-
-                                // Save to Hive
-                                await LocalStorageService.updateTrashItem(item);
-
-                                setState(() {
                                   _createMarkers();
                                 });
 
@@ -709,16 +652,14 @@ class _MapScreenState extends State<MapScreen> {
                             width: double.infinity,
                             child: OutlinedButton(
                               onPressed: () async {
+                                // Update in Firestore
+                                await FirestoreService.unclaimTrashItem(
+                                    item.id);
+
                                 setState(() {
                                   item.status = ItemStatus.available;
-                                  item.claimedBy = null;
+                                  item.claimedByUserId = null;
                                   _currentlyClaimedItem = null;
-                                });
-
-                                // Save to Hive
-                                await LocalStorageService.updateTrashItem(item);
-
-                                setState(() {
                                   _createMarkers();
                                 });
 
@@ -748,7 +689,7 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                         ],
                       )
-                    else if (item.claimedBy != null)
+                    else if (item.claimedByUserId != null)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -756,11 +697,11 @@ class _MapScreenState extends State<MapScreen> {
                           color: Colors.orange.shade100,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          '${item.claimedBy} is on the way for this item',
+                        child: const Text(
+                          'Someone is on the way for this item',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.orange.shade700,
+                            color: Colors.orange,
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
                           ),
@@ -774,7 +715,7 @@ class _MapScreenState extends State<MapScreen> {
                     const SizedBox(height: 16),
                     // Show who claimed it if applicable
                     if (item.status == ItemStatus.claimed &&
-                        item.claimedBy != null)
+                        item.claimedByUserId != null)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
@@ -784,18 +725,18 @@ class _MapScreenState extends State<MapScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.orange.shade200),
                         ),
-                        child: Text(
-                          '${item.claimedBy} claimed this item',
+                        child: const Text(
+                          'Someone claimed this item',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.orange.shade700,
+                            color: Colors.orange,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
                         ),
                       ),
                     if (item.status == ItemStatus.claimed &&
-                        item.claimedBy != null)
+                        item.claimedByUserId != null)
                       const SizedBox(height: 12),
                     // Always show "Mark as Picked Up" button for poster
                     SizedBox(
@@ -805,14 +746,11 @@ class _MapScreenState extends State<MapScreen> {
                           // Capture messenger before async gap
                           final messenger = ScaffoldMessenger.of(context);
 
+                          // Update in Firestore
+                          await FirestoreService.markItemPickedUp(item.id);
+
                           setState(() {
                             item.status = ItemStatus.pickedUp;
-                          });
-
-                          // Save to Hive
-                          await LocalStorageService.updateTrashItem(item);
-
-                          setState(() {
                             _createMarkers();
                           });
 
@@ -932,8 +870,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildDrawer(BuildContext context) {
-    final UserModel? currentUser = LocalStorageService.getCurrentUser();
-
     return Drawer(
       child: Column(
         children: [
@@ -944,16 +880,18 @@ class _MapScreenState extends State<MapScreen> {
             ),
             currentAccountPicture: CircleAvatar(
               backgroundColor: Colors.white,
-              child: currentUser?.photoUrl != null
+              child: _currentUser?.photoUrl != null
                   ? ClipOval(
                       child: Image.network(
-                        currentUser!.photoUrl!,
+                        _currentUser!.photoUrl!,
                         width: 90,
                         height: 90,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Text(
-                            currentUser.firstName[0].toUpperCase(),
+                            _currentUser!.firstName.isNotEmpty
+                                ? _currentUser!.firstName[0].toUpperCase()
+                                : 'U',
                             style: TextStyle(
                               fontSize: 40,
                               color: Colors.green.shade700,
@@ -964,7 +902,9 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     )
                   : Text(
-                      currentUser?.firstName[0].toUpperCase() ?? 'U',
+                      _currentUser?.firstName.isNotEmpty == true
+                          ? _currentUser!.firstName[0].toUpperCase()
+                          : 'U',
                       style: TextStyle(
                         fontSize: 40,
                         color: Colors.green.shade700,
@@ -973,14 +913,14 @@ class _MapScreenState extends State<MapScreen> {
                     ),
             ),
             accountName: Text(
-              '${currentUser?.firstName ?? ''} ${currentUser?.lastName ?? ''}',
+              '${_currentUser?.firstName ?? ''} ${_currentUser?.lastName ?? ''}',
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
             accountEmail: Text(
-              currentUser?.email ?? '',
+              _currentUser?.email ?? '',
               style: const TextStyle(fontSize: 14),
             ),
           ),
@@ -1131,7 +1071,7 @@ class _MapScreenState extends State<MapScreen> {
 
           // If item was posted successfully, reload trash items
           if (result == true) {
-            _loadTrashItems();
+            _loadUserAndTrashItems();
           }
         },
         backgroundColor: Colors.green.shade700,

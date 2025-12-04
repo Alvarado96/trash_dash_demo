@@ -4,7 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:trash_dash_demo/models/trash_item.dart';
-import 'package:trash_dash_demo/services/local_storage_service.dart';
+import 'package:trash_dash_demo/services/auth_service.dart';
+import 'package:trash_dash_demo/services/firestore_service.dart';
 import 'package:uuid/uuid.dart';
 
 class PostTrashScreen extends StatefulWidget {
@@ -259,7 +260,7 @@ class _PostTrashScreenState extends State<PostTrashScreen> {
     });
 
     try {
-      final currentUser = LocalStorageService.getCurrentUser();
+      final currentUser = await AuthService().getCurrentUserData();
       if (currentUser == null) {
         throw Exception('No user logged in');
       }
@@ -277,13 +278,14 @@ class _PostTrashScreenState extends State<PostTrashScreen> {
             : _descriptionController.text.trim(),
         imageUrl: imageUrl,
         location: _selectedLocation!,
-        postedBy: '${currentUser.firstName} ${currentUser.lastName}',
+        postedByUserId: currentUser.uid,
+        postedByName: '${currentUser.firstName} ${currentUser.lastName}',
         postedAt: DateTime.now(),
         status: ItemStatus.available,
         isCurbside: _isCurbside,
       );
 
-      await LocalStorageService.saveTrashItem(newItem);
+      await FirestoreService.createTrashItem(newItem);
 
       if (mounted) {
         Navigator.pop(context, true); // Return true to indicate success

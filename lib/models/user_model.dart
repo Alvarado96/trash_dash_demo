@@ -1,35 +1,15 @@
-import 'package:hive/hive.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-part 'user_model.g.dart';
-
-@HiveType(typeId: 0)
-class UserModel extends HiveObject {
-  @HiveField(0)
+class UserModel {
   final String uid;
-
-  @HiveField(1)
   final String email;
-
-  @HiveField(2)
   final String firstName;
-
-  @HiveField(3)
   final String lastName;
-
-  @HiveField(4)
   final String? photoUrl;
-
-  @HiveField(5)
   final DateTime createdAt;
-
-  @HiveField(6)
-  final String? passwordHash;
-
-  @HiveField(7)
   final List<String> interestedCategories;
-
-  @HiveField(8)
   final List<String> savedItemIds;
+  final List<String> postedItemIds;
 
   UserModel({
     required this.uid,
@@ -38,32 +18,84 @@ class UserModel extends HiveObject {
     required this.lastName,
     this.photoUrl,
     required this.createdAt,
-    this.passwordHash,
     this.interestedCategories = const [],
     this.savedItemIds = const [],
+    this.postedItemIds = const [],
   });
 
   String get fullName => '$firstName $lastName';
 
-  Map<String, dynamic> toMap() {
+  /// Converts the UserModel to a Map for Firestore
+  Map<String, dynamic> toFirestore() {
     return {
-      'uid': uid,
-      'email': email,
       'firstName': firstName,
       'lastName': lastName,
+      'email': email,
       'photoUrl': photoUrl,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': Timestamp.fromDate(createdAt),
+      'interestedCategories': interestedCategories,
+      'savedItemIds': savedItemIds,
+      'postedItemIds': postedItemIds,
     };
   }
 
-  factory UserModel.fromMap(Map<String, dynamic> map) {
+  /// Creates a UserModel from a Firestore DocumentSnapshot
+  factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
     return UserModel(
-      uid: map['uid'] ?? '',
+      uid: doc.id,
+      email: data['email'] ?? '',
+      firstName: data['firstName'] ?? '',
+      lastName: data['lastName'] ?? '',
+      photoUrl: data['photoUrl'],
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      interestedCategories: List<String>.from(data['interestedCategories'] ?? []),
+      savedItemIds: List<String>.from(data['savedItemIds'] ?? []),
+      postedItemIds: List<String>.from(data['postedItemIds'] ?? []),
+    );
+  }
+
+  /// Creates a UserModel from a Map (for compatibility)
+  factory UserModel.fromMap(Map<String, dynamic> map, {String? uid}) {
+    return UserModel(
+      uid: uid ?? map['uid'] ?? '',
       email: map['email'] ?? '',
       firstName: map['firstName'] ?? '',
       lastName: map['lastName'] ?? '',
       photoUrl: map['photoUrl'],
-      createdAt: DateTime.parse(map['createdAt']),
+      createdAt: map['createdAt'] is Timestamp
+          ? (map['createdAt'] as Timestamp).toDate()
+          : (map['createdAt'] is String
+              ? DateTime.parse(map['createdAt'])
+              : DateTime.now()),
+      interestedCategories: List<String>.from(map['interestedCategories'] ?? []),
+      savedItemIds: List<String>.from(map['savedItemIds'] ?? []),
+      postedItemIds: List<String>.from(map['postedItemIds'] ?? []),
+    );
+  }
+
+  /// Creates a copy of the UserModel with updated fields
+  UserModel copyWith({
+    String? uid,
+    String? email,
+    String? firstName,
+    String? lastName,
+    String? photoUrl,
+    DateTime? createdAt,
+    List<String>? interestedCategories,
+    List<String>? savedItemIds,
+    List<String>? postedItemIds,
+  }) {
+    return UserModel(
+      uid: uid ?? this.uid,
+      email: email ?? this.email,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      photoUrl: photoUrl ?? this.photoUrl,
+      createdAt: createdAt ?? this.createdAt,
+      interestedCategories: interestedCategories ?? this.interestedCategories,
+      savedItemIds: savedItemIds ?? this.savedItemIds,
+      postedItemIds: postedItemIds ?? this.postedItemIds,
     );
   }
 }
