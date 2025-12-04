@@ -86,13 +86,19 @@ class FirestoreService {
 
   // ============ TRASH ITEM OPERATIONS ============
 
-  /// Create a new trash item in Firestore
+  /// Create a new trash item in Firestore using a transaction for consistency
   static Future<void> createTrashItem(TrashItem item) async {
-    await trashItemsCollection.doc(item.id).set(item.toFirestore());
-    // Also add to user's posted items
-    if (item.postedByUserId.isNotEmpty) {
-      await addPostedItem(item.postedByUserId, item.id);
-    }
+    await _firestore.runTransaction((transaction) async {
+      // Add the trash item
+      transaction.set(trashItemsCollection.doc(item.id), item.toFirestore());
+      
+      // Also add to user's posted items if userId is provided
+      if (item.postedByUserId.isNotEmpty) {
+        transaction.update(usersCollection.doc(item.postedByUserId), {
+          'postedItemIds': FieldValue.arrayUnion([item.id]),
+        });
+      }
+    });
   }
 
   /// Get trash item by ID
@@ -109,14 +115,25 @@ class FirestoreService {
     await trashItemsCollection.doc(item.id).update(item.toFirestore());
   }
 
-  /// Delete trash item
+  /// Delete trash item using a transaction for consistency
   static Future<void> deleteTrashItem(String id) async {
-    // Get the item first to remove from user's posted items
-    final item = await getTrashItem(id);
-    if (item != null && item.postedByUserId.isNotEmpty) {
-      await removePostedItem(item.postedByUserId, id);
-    }
-    await trashItemsCollection.doc(id).delete();
+    // Get the item first to find the user ID
+    final doc = await trashItemsCollection.doc(id).get();
+    if (!doc.exists) return;
+    
+    final item = TrashItem.fromFirestore(doc);
+    
+    await _firestore.runTransaction((transaction) async {
+      // Remove from user's posted items if userId is available
+      if (item.postedByUserId.isNotEmpty) {
+        transaction.update(usersCollection.doc(item.postedByUserId), {
+          'postedItemIds': FieldValue.arrayRemove([id]),
+        });
+      }
+      
+      // Delete the trash item
+      transaction.delete(trashItemsCollection.doc(id));
+    });
   }
 
   /// Get all trash items
